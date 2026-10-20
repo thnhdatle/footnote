@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Loads and renders the versioned prompt templates in `footnote.app.prompts`."""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass
+from importlib import resources
+from string import Template
+
+from footnote.domain.errors import ValidationError
+from footnote.domain.ports import ChatMessage
+from footnote.domain.retrieval import Hit
+
+_SECTION = re.compile(r"^## (system|user)\s*$", re.MULTILINE)
+
+
+@dataclass(frozen=True, slots=True)
+class PromptTemplate:
+    """A system/user template pair; the user part takes `$context` and `$question`."""
+
+    name: str
+    system: str
+    user: str
+
+    def render(self, question: str, hits: Sequence[Hit]) -> list[ChatMessage]:
+        """Build chat messages with numbered context blocks `[1] … [k]`."""
+        blocks = []
+        for n, hit in enumerate(hits, start=1):
+            path = " > ".join(hit.heading_path)
+            header = f"[{n}] {hit.title}" + (f" — {path}" if path else "")
+            blocks.append(f"{header}\n{hit.text}")
+        user = Template(self.user).safe_substitute(context="\n\n".join(blocks), question=question)
+        return [ChatMessage("system", self.system), ChatMessage("user", user)]
+
+
+def available_templates() -> list[str]:
+    """Names of the shipped templates."""
+    root = resources.files("footnote.app.prompts")
+    return sorted(p.name[:-3] for p in root.iterdir() if p.name.endswith(".md"))
+
+
+def load_template(name: str) -> PromptTemplate:
+    """Load a shipped template by name (e.g. `answer_v1`)."""
+    if name not in available_templates():
+        raise ValidationError("answer.prompt_template", f"unknown template {name!r}")
+    text = resources.files("footnote.app.prompts").joinpath(f"{name}.md").read_text("utf-8")
+    parts = _SECTION.split(text)
+    sections = dict(zip(parts[1::2], (p.strip() for p in parts[2::2]), strict=True))
+    if set(sections) != {"system", "user"}:
+        raise ValidationError("answer.prompt_template", f"{name} needs system and user sections")
+    return PromptTemplate(name, sections["system"], sections["user"])

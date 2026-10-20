@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Pre-commit checks: ruff format/check, gitleaks.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+if [ -f pyproject.toml ]; then
+  uv run --frozen ruff format --check .
+  uv run --frozen ruff check .
+fi
+gitleaks protect --staged --no-banner

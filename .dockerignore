@@ -1,0 +1,18 @@
+# Build context: sources only. Hidden files and directories (VCS data, editor and tool
+# state, caches, local environments) and local outputs never enter the image build.
+.*
+**/__pycache__
+**/*.pyc
+acceptance
+bench
+dist
+docs
+eval
+examples
+mutants
+scripts
+tests
+deploy
+*.local.yaml
+models/*
+!models/manifest.yaml

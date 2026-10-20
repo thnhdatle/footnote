@@ -1,0 +1,13 @@
+# Evaluation datasets for the evaluation harness. Downloaded by scripts/fetch_eval_data.sh into
+# ${FOOTNOTE_EVAL_DATA_DIR:-~/.cache/rayld/footnote/datasets}; never committed.
+datasets:
+  scifact:
+    url: https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/scifact.zip
+    sha256: 536e14446a0ba56ed1398ab1055f39fe852686ecad24a6306c80c490fa8e0165
+    size_bytes: 2816079
+    license: "Claims CC BY 4.0; abstracts ODC-By 1.0."
+  trec-covid:
+    url: https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/trec-covid.zip
+    sha256: 120f42a7864d2214234537733c0d2c6684e42fdfafff2c5eacf98afca6656aa0
+    size_bytes: 73876720
+    license: "CORD-19: mixed per-paper licenses; benchmark use only."

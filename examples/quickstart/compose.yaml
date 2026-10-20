@@ -1,0 +1,8 @@
+# Override for deploy/docker-compose.yml: mounts config.yaml into the footnote service.
+# Used as: docker compose -f deploy/docker-compose.yml -f examples/quickstart/compose.yaml ...
+services:
+  footnote:
+    environment:
+      FOOTNOTE_CONFIG: /config/footnote.yaml
+    volumes:
+      - ../examples/quickstart/config.yaml:/config/footnote.yaml:ro

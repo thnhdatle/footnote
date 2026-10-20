@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The functional acceptance criteria and the quickstart need the released fakellm stub.
+  RAYLD_FAKELLM_IMAGE: ghcr.io/thnhdatle/fakellm:v0.1.0
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - run: scripts/ci_install_tools.sh
+      - name: Cache pinned models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/rayld/footnote/models
+          key: models-${{ hashFiles('models/manifest.yaml') }}
+      - run: make bootstrap
+      # - name: Pull the fakellm image
+      #   run: docker pull "$RAYLD_FAKELLM_IMAGE"
+      # `make security` scans the local image, so it is built before `make ci`.
+      # - run: make docker
+      - run: make lint test
+      # - run: make acceptance CI=1
+      # - run: make quickstart-test
+      # - run: make release-dry

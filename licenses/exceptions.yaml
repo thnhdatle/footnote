@@ -1,0 +1,59 @@
+# Reviewed license exceptions for the pip-licenses --allow-only gate.
+# scripts/security.sh fails if a version or license here differs from the installed one.
+exceptions:
+  - name: cffi
+    version: "2.1.1"
+    license: "MIT-0"
+    reason: "MIT-0 is MIT without the attribution clause; reviewed, permissive."
+  - name: cryptography
+    version: "50.0.2"
+    license: "Apache-2.0 OR BSD-3-Clause"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: numpy
+    version: "2.5.4"
+    license: "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: orjson
+    version: "3.13.0"
+    license: "MPL-2.0 AND (Apache-2.0 OR MIT)"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: packaging
+    version: "26.3"
+    license: "Apache-2.0 OR BSD-2-Clause"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: prometheus_client
+    version: "0.26.0"
+    license: "Apache-2.0 AND BSD-2-Clause"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: protobuf
+    version: "7.36.2"
+    license: "3-Clause BSD License"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: psycopg
+    version: "3.3.6"
+    license: "LGPL-3.0-only"
+    reason: "LGPL-3.0 library used unmodified from PyPI wheels, never vendored or patched."
+  - name: psycopg-binary
+    version: "3.3.6"
+    license: "LGPL-3.0-only"
+    reason: "LGPL-3.0 library used unmodified from PyPI wheels, never vendored or patched."
+  - name: psycopg-pool
+    version: "3.3.3"
+    license: "LGPL-3.0-only"
+    reason: "LGPL-3.0 library used unmodified from PyPI wheels, never vendored or patched."
+  - name: pypdfium2
+    version: "5.14.0"
+    license: "BSD-3-Clause, Apache-2.0, dependency licenses"
+    reason: "BSD-3-Clause and Apache-2.0 with bundled third-party licenses (pdfium: BSD-3/Apache-2.0); reviewed, all on the allow-list."
+  - name: structlog
+    version: "26.1.0"
+    license: "MIT OR Apache-2.0"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: tqdm
+    version: "4.70.1"
+    license: "MPL-2.0 AND MIT"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
+  - name: uvloop
+    version: "0.23.0"
+    license: "Apache Software License; MIT License"
+    reason: "Compound or non-SPDX metadata string; every component is on the project license allow-list (scripts/security.sh); reviewed."
