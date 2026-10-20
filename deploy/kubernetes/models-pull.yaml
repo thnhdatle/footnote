@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: footnote-models
+  labels:
+    app.kubernetes.io/name: footnote
+    app.kubernetes.io/component: models
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: models
+          image: ghcr.io/thnhdatle/footnote:v0.1.0
+          args: ["models", "pull"]
+          envFrom:
+            - configMapRef:
+                name: footnote-config
+            - secretRef:
+                name: footnote-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: models
+              mountPath: /models
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: models
+          persistentVolumeClaim:
+            claimName: footnote-models

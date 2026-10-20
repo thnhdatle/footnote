@@ -1,0 +1,113 @@
+# Footnote compose stack: Postgres + pgvector, fakellm and Footnote.
+# The whole stack fits in a Docker VM with 10 GB of memory.
+name: footnote
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: footnote
+    ports:
+      - "127.0.0.1:${FOOTNOTE_PG_PORT:-55432}:5432"
+    # HNSW builds use parallel workers over /dev/shm; the 64 MB default is too small.
+    shm_size: 1gb
+    command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=100"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d footnote"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    mem_limit: 2g
+  # One-shot, idempotent: extension, roles, schema, grants. Dev passwords only.
+  bootstrap:
+    image: pgvector/pgvector:0.8.1-pg17
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: footnote
+    volumes:
+      - ./sql/bootstrap.sql:/bootstrap/bootstrap.sql:ro
+    command:
+      - psql
+      - -v
+      - app_password='footnote_app'
+      - -v
+      - admin_password='footnote_admin'
+      - -f
+      - /bootstrap/bootstrap.sql
+    restart: "no"
+    mem_limit: 128m
+  # One-shot: alembic upgrade as footnote_admin.
+  migrate:
+    image: ${RAYLD_FOOTNOTE_IMAGE:-thnhdatle/footnote:dev}
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      FOOTNOTE_ADMIN_DATABASE_URL: postgresql://footnote_admin:footnote_admin@postgres:5432/footnote
+    command: ["migrate"]
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 512m
+  # One-shot, idempotent: download the pinned models into the volume (SHA-256 checked;
+  # files already verified are kept). Needs network access to huggingface.co once.
+  models:
+    image: ${RAYLD_FOOTNOTE_IMAGE:-thnhdatle/footnote:dev}
+    command: ["models", "pull"]
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - models:/models
+    mem_limit: 512m
+  # Optional deterministic LLM/embedding stub: `docker compose --profile fakellm up`.
+  fakellm:
+    profiles: ["fakellm"]
+    image: ${RAYLD_FAKELLM_IMAGE:-ghcr.io/thnhdatle/fakellm:v0.1.0}
+    command: ["--listen", ":8090"]
+    ports:
+      - "127.0.0.1:${FOOTNOTE_FAKELLM_PORT:-8090}:8090"
+    mem_limit: 256m
+  # Single-node stack: data plane, admin listener and the job worker in one process.
+  footnote:
+    image: ${RAYLD_FOOTNOTE_IMAGE:-thnhdatle/footnote:dev}
+    command: ["serve", "--with-worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      models:
+        condition: service_completed_successfully
+    environment:
+      FOOTNOTE_SERVER_LISTEN: 0.0.0.0:8000
+      FOOTNOTE_ADMIN_LISTEN: 0.0.0.0:9094
+      FOOTNOTE_DATABASE_URL: postgresql://footnote_app:footnote_app@postgres:5432/footnote
+      FOOTNOTE_ADMIN_DATABASE_URL: postgresql://footnote_admin:footnote_admin@postgres:5432/footnote
+      FOOTNOTE_AUTH_ADMIN_KEY: dev-admin-key-change-me
+      FOOTNOTE_LLM_BASE_URL: ${FOOTNOTE_LLM_BASE_URL:-http://fakellm:8090/v1}
+      FOOTNOTE_LLM_MODEL: ${FOOTNOTE_LLM_MODEL:-fake-default}
+      FOOTNOTE_LLM_API_KEY: ${FOOTNOTE_LLM_API_KEY:-}
+      FOOTNOTE_EMBEDDING_BASE_URL: ${FOOTNOTE_EMBEDDING_BASE_URL:-http://fakellm:8090/v1}
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:9094:9094"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - models:/models
+    mem_limit: 3g
+    healthcheck:
+      test: ["CMD", "footnote", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  models: {}

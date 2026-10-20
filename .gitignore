@@ -1,0 +1,41 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+mutants/
+.import_linter_cache/
+
+# Acceptance and benchmarks (raw outputs)
+acceptance/logs/
+acceptance/report.partial.md
+bench/raw/
+out/
+bench/*.raw.*
+
+# Local-only configuration
+*.local.yaml
+.env
+.env.*
+!.env.example
+
+# Models and datasets (downloaded by the user, never committed)
+*.onnx
+models/cache/
+.cache/
+data/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

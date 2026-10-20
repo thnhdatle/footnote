@@ -1,0 +1,123 @@
+# Footnote configuration example: every option with its default.
+# Pass with --config or FOOTNOTE_CONFIG. Any option can be overridden by the env var
+# FOOTNOTE_<PATH> (path joined by underscores, e.g. FOOTNOTE_DATABASE_POOL_MAX);
+# mapping and list options take JSON. Durations: 30s, 10m, 24h, 14d. Sizes: 64MiB.
+# Secrets never go in this file: set them via env or the sibling *_file key:
+#   FOOTNOTE_DATABASE_URL, FOOTNOTE_ADMIN_DATABASE_URL, FOOTNOTE_AUTH_ADMIN_KEY,
+#   FOOTNOTE_LLM_API_KEY, FOOTNOTE_EMBEDDING_API_KEY.
+server:
+  listen: 127.0.0.1:8000                  # data plane; compose: 0.0.0.0:8000
+admin:
+  listen: 127.0.0.1:9094                  # /healthz, /readyz, /metrics
+shutdown_timeout: 30s                     # grace for in-flight requests and jobs on SIGTERM
+log:
+  format: json                            # json | text
+  level: info                             # debug | info | warn | error
+  capture_content: false                  # prompts/completions in logs and spans, truncated to 256 chars
+  access_log: false                       # one info line per request when true
+database:                                 # footnote_app
+  url_file: ""                            # file with the URL; or FOOTNOTE_DATABASE_URL
+  pool_max: 20                            # maximum pooled connections
+  prepare_threshold: 5                    # null behind a transaction pooler
+  statement_timeout: 30s                  # per-transaction statement timeout
+admin_database:                           # footnote_admin (owner): migrations, admin API, space registration
+  url_file: ""                            # file with the URL; or FOOTNOTE_ADMIN_DATABASE_URL
+  pool_max: 4                             # maximum pooled connections
+auth:
+  admin_key_file: ""                      # file with the admin key; or FOOTNOTE_AUTH_ADMIN_KEY
+  key_rotation_grace: 24h                 # old tenant key stays valid this long after rotation
+tenancy:
+  default_quotas: {max_collections: 0, max_documents: 0, max_chunks: 0, max_upload_bytes_per_day: 0}  # 0 = unlimited
+collections:
+  default_language: simple                # simple | english
+llm:
+  base_url: ""                            # FOOTNOTE_LLM_BASE_URL; "" disables answers; LM Studio: http://localhost:1234/v1, Triage: http://localhost:8080/v1
+  model: ""                               # chat model name sent to the provider; required when base_url is set
+  api_key_file: ""                        # file with the key; or FOOTNOTE_LLM_API_KEY
+  extra_headers: {}                       # forwarded on every request
+  extra_body: {}                          # merged into chat requests (e.g. reasoning switches)
+  temperature: 0                          # 0..2
+  max_tokens: 512                         # completion cap
+  timeout: 120s                           # per request
+  max_retries: 2                          # on 429, 5xx and transport errors
+embedding:
+  default_space: bge-small-en-v1.5-onnx   # must be one of spaces
+  spaces:                                 # registered at startup via footnote_register_space
+    - name: bge-small-en-v1.5-onnx
+      provider: onnx_local                # onnx_local | openai_compat
+      model: bge-small-en-v1.5            # models/manifest.yaml id; 384-d
+      calibrated_threshold: null          # copied into embedding_spaces at registration; null = manifest value
+    # - name: bge-m3-lmstudio             # optional; needs LM Studio and embedding.base_url
+    #   provider: openai_compat
+    #   model: text-embedding-bge-m3
+    #   dimensions: 1024                  # required for openai_compat
+    #   send_dimensions: false            # send the dimensions parameter to the provider
+    #   normalise: true                   # provider already normalises (Footnote always does)
+    #   calibrated_threshold: null        # copied into embedding_spaces at registration
+  base_url: ""                            # FOOTNOTE_EMBEDDING_BASE_URL (openai_compat)
+  api_key_file: ""                        # file with the key; or FOOTNOTE_EMBEDDING_API_KEY
+  extra_headers: {}                       # forwarded on every embedding request
+  batch_size: 64                          # texts per request
+  max_concurrency: 4                      # parallel requests
+  timeout: 30s                            # per request
+  max_retries: 3                          # on 429, 5xx and transport errors
+  max_spaces: 8                           # registered spaces cap
+  hnsw: {m: 16, ef_construction: 64}      # pgvector index build; ef_construction >= 2*m
+models:
+  dir: ~/.cache/rayld/footnote/models     # /models in the image (volume)
+  manifest: models/manifest.yaml          # pinned local models
+  intra_op_threads: 0                     # 0 = ONNX Runtime default
+rerank:
+  provider: onnx_cross_encoder            # onnx_cross_encoder | noop
+  model: ms-marco-MiniLM-L6-v2            # models/manifest.yaml id
+  variant: int8                           # int8 (per-arch file) | fp32
+  max_tokens: 256                         # query + passage token cap
+  batch_size: 32                          # pairs per inference batch
+chunking:                                 # defaults for new collections (collection settings bounds)
+  strategy: heading                       # heading | recursive | fixed
+  tokenizer: bge-small-en-v1.5            # models/manifest.yaml id with a tokenizer file
+  max_tokens: 400                         # 32..2048
+  overlap_tokens: 40                      # 0..max_tokens/2
+  min_tokens: 50                          # 0..max_tokens
+retrieval:                                # defaults for new collections (collection settings bounds)
+  default_mode: hybrid                    # vector | lexical | hybrid
+  lexical_match: any                      # any | all | websearch
+  lexical_rank: ts_rank                   # ts_rank | ts_rank_cd
+  k_lexical: 50                           # lexical leg candidates, 1..1000
+  k_vector: 50                            # vector leg candidates, 1..1000
+  rrf_k: 60                               # 1..1000
+  rrf_weights: {lexical: 0.2, vector: 1.0}  # 0..10 each, not both 0; lexical: SciFact train-split choice
+  rerank: true                            # rerank the fused list
+  rerank_n: 30                            # candidates reranked, k..200
+  k: 8                                    # results returned, 1..100
+  ef_search: 64                           # hnsw.ef_search, 1..1000
+  iterative_scan: relaxed_order           # off | relaxed_order | strict_order
+  max_scan_tuples: 20000                  # hnsw.max_scan_tuples
+  exact_scan_max: 20000                   # collections at or below this many chunks use exact scan
+answer:
+  evidence_threshold_rerank: null         # null = manifest calibrated_threshold of the active reranker file
+  evidence_threshold_vector: null         # null = calibrated_threshold of the collection's space
+  unsupported_as_abstain: false           # report unsupported answers as abstentions
+  prompt_template: answer_v1              # app/prompts/<name>.md
+ingest:
+  workers: 4                              # concurrent jobs per worker process
+  max_file_bytes: 50MiB                   # upload size cap
+  max_pages: 2000                         # PDF page cap
+  max_uncompressed_bytes: 200MiB          # decompression cap (zip bombs)
+  max_archive_members: 10000              # DOCX/zip member cap
+  parse_timeout: 300s                     # sandboxed parser wall clock
+  retain_originals: true                  # keep uploaded files after parsing
+  gc_grace: 10m                           # delay before garbage collecting replaced chunks
+  job_lease: 60s                          # job lease; renewed every third of it
+  job_max_attempts: 5                     # attempts before a job fails permanently
+  poll_interval: 1s                       # idle queue poll
+webhooks:
+  allow_http: false                       # allow http:// targets
+  allow_private: false                    # allow private and loopback addresses
+  timeout: 5s                             # per delivery attempt
+  max_attempts: 5                         # delivery attempts
+eval:
+  cache_dir: ~/.cache/rayld/footnote/eval # embedding cache of the evaluation harness
+  calibration_target_answer_rate: 0.85    # (0, 1]
+testing:
+  disable_app_tenant_predicates: false    # honoured only with env FOOTNOTE_ENABLE_TEST_FAULTS=1 (tenant-isolation fault test; a process flag, not a config path); logs a warning

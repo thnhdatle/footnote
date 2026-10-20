@@ -1,0 +1,185 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rayld-footnote"
+version = "0.1.0"
+description = "RAG engine on Postgres alone: hybrid retrieval, verifiable citations, tenant isolation, built-in evaluation."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "The Footnote Authors" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: FastAPI",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing :: Indexing",
+]
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic>=2",
+  "pydantic-settings",
+  "psycopg[binary,pool]>=3.2",
+  "pgvector",
+  "alembic",
+  "sqlalchemy",
+  "httpx",
+  "structlog",
+  "opentelemetry-sdk",
+  "opentelemetry-exporter-otlp-proto-http",
+  "prometheus-client",
+  "typer",
+  "pypdf",
+  "pdfplumber",
+  "python-docx",
+  "selectolax",
+  "markdown-it-py",
+  "onnxruntime",
+  "tokenizers",
+  "numpy",
+  "zstandard",
+  "python-ulid",
+  "orjson",
+  "pyyaml",
+  "python-multipart",
+]
+
+[project.optional-dependencies]
+eval = ["bm25s", "PyStemmer"]
+
+[project.urls]
+Homepage = "https://github.com/thnhdatle/footnote"
+Documentation = "https://github.com/thnhdatle/footnote/tree/main/docs"
+Issues = "https://github.com/thnhdatle/footnote/issues"
+Changelog = "https://github.com/thnhdatle/footnote/blob/main/CHANGELOG.md"
+
+[project.scripts]
+footnote = "footnote.__main__:main"
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-xdist",
+  "pytest-json-report",
+  "pytest-asyncio",
+  "hypothesis",
+  "respx",
+  "testcontainers[postgres]",
+  "mutmut",
+  "import-linter",
+  "pip-audit",
+  "pip-licenses",
+  "ruff",
+  "mypy",
+  "reportlab",
+  "types-pyyaml",
+  "psycopg[binary,pool]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/footnote"]
+
+[tool.hatch.build.targets.sdist]
+# Sources only: hidden files and directories (tool state, local environments) and local
+# outputs stay out even when they are not listed in .gitignore.
+exclude = [
+  "/.*",
+  "/dist",
+  "/mutants",
+  "/acceptance/logs",
+  "/acceptance/report.partial.md",
+  "/out",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "acceptance", "bench"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PT", "ARG", "ERA", "PL", "RUF", "S"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "S105", "S106", "ARG001", "ARG002"]
+"acceptance/**" = ["S101", "PLR2004", "S105", "S106", "S603", "S607", "ARG001"]
+"bench/**" = ["S101", "S603", "S607", "PLR2004"]
+"tests/fixtures/**" = ["S101", "PLR2004"]
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-statements = 60
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "src"
+packages = ["footnote"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["pgvector.*", "pdfplumber.*", "pypdf.*", "selectolax.*", "onnxruntime.*", "tokenizers.*", "bm25s.*", "Stemmer.*", "reportlab.*", "testcontainers.*", "docx.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+markers = [
+  "integration: needs Postgres via Testcontainers",
+  "acceptance: acceptance criterion (run by acceptance/runner.py)",
+]
+
+[tool.coverage.run]
+source = ["src/footnote"]
+branch = false
+omit = ["src/footnote/__main__.py", "src/footnote/_version.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+[tool.importlinter]
+root_package = "footnote"
+include_external_packages = false
+
+[[tool.importlinter.contracts]]
+name = "domain is pure"
+type = "forbidden"
+source_modules = ["footnote.domain"]
+forbidden_modules = ["footnote.app", "footnote.adapters", "footnote.api", "footnote.bootstrap"]
+
+[[tool.importlinter.contracts]]
+name = "app depends on domain only"
+type = "forbidden"
+source_modules = ["footnote.app"]
+forbidden_modules = ["footnote.adapters", "footnote.api", "footnote.bootstrap"]
+ignore_imports = ["footnote.app.evaluation.** -> footnote.bootstrap"]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "api and adapters are independent"
+type = "independence"
+modules = ["footnote.api", "footnote.adapters"]
+
+[tool.mutmut]
+# Mutation-tested core modules (score >= 60%); run via scripts/mutation.sh with unit tests only.
+source_paths = [
+  "src/footnote/domain/chunking.py",
+  "src/footnote/domain/retrieval.py",
+  "src/footnote/domain/citations.py",
+  "src/footnote/domain/evidence.py",
+  "src/footnote/domain/netpolicy.py",
+  "src/footnote/app/ingest.py",
+  "src/footnote/app/evaluation/metrics.py",
+]
+pytest_add_cli_args_test_selection = ["tests/unit/"]
+also_copy = ["src/footnote", "tests", "models", "acceptance", "docs", "deploy", "examples", "eval", "migrations", "alembic.ini", "scripts", "Makefile", "README.md", "CHANGELOG.md", "pyproject.toml"]
+pytest_add_cli_args = ["-p", "no:cacheprovider", "-m", "not integration and not acceptance"]

@@ -1,0 +1,38 @@
+# Example configuration. Replace the Secret values before applying; never commit real ones.
+# Mirrors deploy/docker-compose.yml: one env var per setting (FOOTNOTE_<SECTION>_<KEY>).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: footnote-config
+  labels:
+    app.kubernetes.io/name: footnote
+data:
+  FOOTNOTE_SERVER_LISTEN: 0.0.0.0:8000
+  FOOTNOTE_ADMIN_LISTEN: 0.0.0.0:9094
+  FOOTNOTE_LLM_BASE_URL: http://llm.example.svc:8080/v1
+  FOOTNOTE_LLM_MODEL: llm-model-name
+  FOOTNOTE_EMBEDDING_BASE_URL: http://llm.example.svc:8080/v1
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: footnote-secrets
+  labels:
+    app.kubernetes.io/name: footnote
+type: Opaque
+stringData:
+  FOOTNOTE_DATABASE_URL: postgresql://footnote_app:CHANGE_ME@postgres:5432/footnote
+  FOOTNOTE_ADMIN_DATABASE_URL: postgresql://footnote_admin:CHANGE_ME@postgres:5432/footnote
+  FOOTNOTE_AUTH_ADMIN_KEY: CHANGE_ME
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: footnote-models
+  labels:
+    app.kubernetes.io/name: footnote
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 2Gi

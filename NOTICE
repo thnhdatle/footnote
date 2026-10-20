@@ -1,0 +1,11 @@
+Footnote
+Copyright 2026 The Footnote Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party assets
+------------------
+No third-party assets are vendored in this repository. Model weights and
+datasets are not distributed with it; they are downloaded by the user and
+described, with their licenses, in models/manifest.yaml. If front-end or other
+assets are vendored later, each is listed here with its license.

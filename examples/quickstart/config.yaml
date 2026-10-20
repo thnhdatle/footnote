@@ -1,0 +1,8 @@
+# Quickstart: an offline smoke test. The language model is the fakellm stub in
+# the compose stack; it returns the canned answer below, so the text is not a real answer.
+# Retrieval, the evidence gate and citation verification run for real with the local models.
+llm:
+  base_url: http://fakellm:8090/v1
+  model: fake-default
+  extra_headers:
+    X-Fake-Answer: "Offline smoke test (canned answer) citing [1]."
