@@ -3,7 +3,7 @@
 # project venv copied into distroless/cc (the distroless Python image ships 3.11).
 # Runs as 65532 with a read-only root filesystem; models live on the /models volume.
 
-FROM ghcr.io/astral-sh/uv:0.11.21@sha256:ff07b86af50d4d9391d9daf4ff89ce427bc544f9aae87057e69a1cc0aa369946 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b AS uv
 
 FROM debian:12-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS build
 COPY --from=uv /uv /usr/local/bin/uv
