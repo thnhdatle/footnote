@@ -31,7 +31,7 @@ def _dispatch(media_type: str, data: bytes, limits: ParseLimits) -> ParsedDocume
     if media_type == media.PDF:
         from footnote.adapters.parsers.pdf_parser import parse_pdf  # noqa: PLC0415
 
-        return ParsedDocument(parse_pdf(data, limits))
+        return parse_pdf(data, limits)
     if media_type == media.DOCX:
         from footnote.adapters.parsers.docx_parser import parse_docx  # noqa: PLC0415
 

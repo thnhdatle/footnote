@@ -61,5 +61,19 @@ class ElementBuilder:
             )
         )
 
+    def image(self, page: int) -> int:
+        order = len(self._elements)
+        self._elements.append(
+            Element(
+                kind=ElementKind.IMAGE,
+                text="",
+                order=order,
+                heading_path=tuple(t for _, t in self._stack),
+                page=page,
+                page_to=page,
+            )
+        )
+        return order
+
     def build(self) -> list[Element]:
         return list(self._elements)

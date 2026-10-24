@@ -26,6 +26,9 @@ class ParseLimits:
     max_uncompressed_bytes: int = 200 * _MIB
     max_archive_members: int = 10000
     parse_timeout: float = 300.0
+    max_images: int = 0
+    max_images_per_page: int = 10
+    min_image_px: int = 64
 
 
 def check_pdf(data: bytes, limits: ParseLimits) -> int:

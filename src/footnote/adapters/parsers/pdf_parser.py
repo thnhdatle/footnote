@@ -17,7 +17,8 @@ from footnote.adapters.parsers.builder import (
     table_markdown,
 )
 from footnote.adapters.parsers.limits import ParseLimits, check_pdf
-from footnote.domain.documents import Element, ElementKind
+from footnote.adapters.parsers.pdf_images import PNG, page_images
+from footnote.domain.documents import ElementKind, PageImage, ParsedDocument
 
 _BULLETS = ("•", "◦", "▪", "▫", "●", "○", "■", "□", "‣", "(cid:127)")
 _HEADING_MARGIN = 0.5
@@ -49,6 +50,7 @@ class _Page:
     height: float
     lines: list[_Line] = field(default_factory=list)
     tables: list[tuple[float, str]] = field(default_factory=list)
+    images: list[tuple[float, bytes]] = field(default_factory=list)
     sizes: Counter[float] = field(default_factory=Counter)
 
 
@@ -169,15 +171,16 @@ def _continues(block: _Block, line: _Line, content_bottom: float) -> bool:
     return line.top - last.top <= gap * line.size
 
 
-def _blocks(pages: list[_Page]) -> list[tuple[int, _Block | str]]:
+def _blocks(pages: list[_Page]) -> list[tuple[int, _Block | str | bytes]]:
     content_bottom = max((ln.bottom for p in pages for ln in p.lines), default=0.0)
-    out: list[tuple[int, _Block | str]] = []
+    out: list[tuple[int, _Block | str | bytes]] = []
     current: _Block | None = None
     for page in pages:
-        items: list[tuple[float, _Line | str]] = [(ln.top, ln) for ln in page.lines]
-        items += [(top, md) for top, md in page.tables]
+        items: list[tuple[float, _Line | str | bytes]] = [(ln.top, ln) for ln in page.lines]
+        items += page.tables
+        items += page.images
         for _, item in sorted(items, key=lambda it: it[0]):
-            if isinstance(item, str):
+            if isinstance(item, str | bytes):
                 out.append((page.number, item))
                 current = None
             elif current is not None and _continues(current, item, content_bottom):
@@ -188,20 +191,31 @@ def _blocks(pages: list[_Page]) -> list[tuple[int, _Block | str]]:
     return out
 
 
-def parse_pdf(data: bytes, limits: ParseLimits | None = None) -> list[Element]:
-    """Parses PDF bytes into elements."""
-    check_pdf(data, limits or ParseLimits())
+def parse_pdf(data: bytes, limits: ParseLimits | None = None) -> ParsedDocument:
+    """Parses PDF bytes into elements and the images to describe."""
+    limits = limits or ParseLimits()
+    check_pdf(data, limits)
     pages: list[_Page] = []
+    remaining = limits.max_images
     with pdfplumber.open(io.BytesIO(data)) as pdf:
         for number, page in enumerate(pdf.pages, start=1):
-            pages.append(_extract_page(page, number))
+            extracted = _extract_page(page, number)
+            if remaining > 0:
+                limit = min(remaining, limits.max_images_per_page)
+                extracted.images = page_images(page, limit, limits.min_image_px)
+                remaining -= len(extracted.images)
+            pages.append(extracted)
             page.close()
     _classify(pages)
     builder = ElementBuilder()
+    images: list[PageImage] = []
     for page_no, item in _blocks(pages):
+        if isinstance(item, bytes):
+            images.append(PageImage(builder.image(page_no), page_no, PNG, item))
+            continue
         if isinstance(item, str):
             builder.add(ElementKind.TABLE, item, page=page_no, page_to=page_no)
             continue
         first, last = item.lines[0], item.lines[-1]
         builder.add(item.kind, item.text(), level=first.level, page=first.page, page_to=last.page)
-    return builder.build()
+    return ParsedDocument(builder.build(), images)
