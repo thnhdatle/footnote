@@ -26,8 +26,12 @@ The type is detected from the content, not the `Content-Type`.
 | Markdown | UTF-8 text named `.md` or `.markdown` | front matter ignored |
 | Text | any other UTF-8 text | split on blank lines |
 
-Anything else is `415 unsupported_media_type`. There is no OCR, so scanned PDFs give no
-text.
+Anything else is `415 unsupported_media_type`.
+
+With `vision.base_url` set, images in PDFs are described by a vision model and stored as
+`image` elements with their page, searched and cited like text. A failed description skips
+only that image. There is no OCR: scanned pages are described, not transcribed, and without
+`vision.base_url` scanned PDFs give no text.
 
 ## 3. Limits
 
