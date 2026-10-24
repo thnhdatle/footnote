@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Footnote — Answers With Citations</title>
+<script>
+  // Edit these.
+  const SITE = "https://your-site.example";
+  const PROJECT = "footnote";
+  const REPO = "https://github.com/thnhdatle/footnote";
+</script>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1117; --panel: #161b24; --line: #2a313c; --text: #e6edf3; --muted: #8b96a5;
+    --b: #2dd4bf; --a: #818cf8; --stall: #ef4444; --track: #0b0e14;
+    --big: 1.75rem; --body: 1rem; --small: .8125rem;
+    --jb: color-mix(in srgb, var(--b) 20%, transparent);
+    --ja: color-mix(in srgb, var(--a) 16%, transparent); --la: color-mix(in srgb, var(--a) 60%, transparent);
+    --ink: color-mix(in srgb, var(--text) 22%, transparent);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 2.2rem 16px 3rem; }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.7rem; }
+  .btn { display: inline-flex; align-items: center; color: var(--text); text-decoration: none;
+    font: 600 var(--small)/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: .68rem 1rem;
+    border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--text) 4%, transparent);
+    cursor: pointer; transition: transform .16s ease, border-color .16s ease; }
+  .btn:hover { border-color: currentColor; }
+  .back:hover { transform: translateX(-2px); }
+  h1 { margin: 0 0 .25rem; font-size: var(--big); line-height: 1.2; letter-spacing: -.01em; }
+  h1 span { color: var(--b); }
+  .sub { margin: 0 0 1.8rem; color: var(--muted); font-size: var(--body); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1.5rem 1.4rem; margin-bottom: 1.4rem; }
+  h2 { margin: 0 0 1.3rem; font-size: var(--small); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
+  .lbl { font-size: var(--small); font-weight: 700; margin-bottom: .5rem; }
+  .lbl span { color: var(--muted); font-weight: 400; }
+  .mid { display: flex; align-items: center; gap: .5rem; color: var(--muted); }
+  .hub { border: 1.5px solid var(--b); color: var(--b); border-radius: 10px; padding: .6rem .8rem; font-weight: 700; font-size: var(--body); }
+  .step { position: relative; height: 1.6em; margin-top: 1.2rem; font-size: var(--body); }
+  .step p { position: absolute; inset: 0; margin: 0; opacity: 0; }
+  .step p b { color: var(--b); }
+  .step p span { color: var(--muted); margin-right: .4rem; }
+  .scene { display: grid; grid-template-columns: 1fr auto 1.15fr; gap: 1rem; align-items: center; }
+
+  /* the PDF page */
+  .page { border: 1.5px solid var(--line); border-radius: 6px 14px 6px 6px; padding: .8rem; display: grid; gap: .5rem; }
+  .part { border-radius: 4px; outline: 1.5px solid transparent; outline-offset: 2px; }
+  .h { height: 11px; width: 55%; background: var(--text); opacity: .7; }
+  .ln { height: 6px; background: var(--ink); }
+  .ln.short { width: 70%; }
+  .tbl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .tbl i { height: 9px; background: var(--ink); }
+  .tbl i:nth-child(-n+3) { background: color-mix(in srgb, var(--text) 40%, transparent); }
+  .img { height: 42px; border: 1px solid var(--line); display: flex; align-items: flex-end; gap: 4px; padding: 5px 8px; }
+  .img i { flex: 1; background: var(--la); border-radius: 2px 2px 0 0; }
+
+  /* what lands in Postgres */
+  .db { border: 1.5px solid var(--line); border-radius: 10px; padding: .6rem .7rem; display: grid; gap: .35rem; }
+  .el { display: flex; justify-content: space-between; gap: .6rem; font-size: var(--small); border: 1.5px solid var(--la);
+    background: var(--ja); border-radius: 6px; padding: .12rem .45rem; opacity: 0; white-space: nowrap; }
+  .el b { font-weight: 700; } .el em { font-style: normal; color: var(--muted); }
+  .el.vis { border-color: var(--b); background: var(--jb); }
+  .ans { margin-top: .7rem; font-size: var(--small); border: 1.5px solid var(--b); background: var(--jb); color: var(--b);
+    border-radius: 6px; padding: .2rem .5rem; opacity: 0; justify-self: start; }
+
+  .live .p1 { animation: g1 10s linear infinite; } .live .p2 { animation: g2 10s linear infinite; }
+  .live .p3 { animation: g3 10s linear infinite; } .live .p4 { animation: g4 10s linear infinite; }
+  .live .e1 { animation: e1 10s linear infinite; } .live .e2 { animation: e2 10s linear infinite; }
+  .live .e3 { animation: e3 10s linear infinite; } .live .e4 { animation: e4 10s linear infinite; }
+  .live .db { animation: db 10s linear infinite; }
+  .live .ans { animation: ans 10s linear infinite; }
+  .live .q1 { animation: quote 10s linear infinite; }
+  .live .hub { animation: hub 10s linear infinite; }
+  .live .t1 { animation: t1 10s linear infinite; } .live .t2 { animation: t2 10s linear infinite; }
+  .live .t3 { animation: t3 10s linear infinite; } .live .t4 { animation: t4 10s linear infinite; }
+  @keyframes g1 { 0%, 26%, 31%, 100% { outline-color: transparent; } 27%, 30% { outline-color: var(--b); } }
+  @keyframes g2 { 0%, 31%, 36%, 100% { outline-color: transparent; } 32%, 35% { outline-color: var(--b); } }
+  @keyframes g3 { 0%, 36%, 41%, 100% { outline-color: transparent; } 37%, 40% { outline-color: var(--b); } }
+  @keyframes g4 { 0%, 41%, 47%, 100% { outline-color: transparent; } 42%, 46% { outline-color: var(--b); } }
+  @keyframes e1 { 0%, 27% { opacity: 0; transform: translateX(-8px); } 30%, 97% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes e2 { 0%, 32% { opacity: 0; transform: translateX(-8px); } 35%, 97% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes e3 { 0%, 37% { opacity: 0; transform: translateX(-8px); } 40%, 97% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes e4 { 0%, 42% { opacity: 0; transform: translateX(-8px); } 45%, 97% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes db { 0%, 51%, 60%, 100% { border-color: var(--line); } 53%, 58% { border-color: var(--b); } }
+  @keyframes ans { 0%, 77% { opacity: 0; transform: translateY(6px); } 80%, 97% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes quote { 0%, 78% { background: var(--ink); } 80%, 97% { background: var(--b); } 100% { background: var(--ink); } }
+  @keyframes hub { 0%, 25%, 48%, 100% { box-shadow: none; } 27%, 46% { box-shadow: 0 0 0 4px var(--jb); } }
+  @keyframes t1 { 0%, 23% { opacity: 1; } 25%, 100% { opacity: 0; } }
+  @keyframes t2 { 0%, 25% { opacity: 0; } 27%, 48% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @keyframes t3 { 0%, 50% { opacity: 0; } 52%, 73% { opacity: 1; } 75%, 100% { opacity: 0; } }
+  @keyframes t4 { 0%, 75% { opacity: 0; } 77%, 98% { opacity: 1; } 100% { opacity: 0; } }
+
+  .q { font-size: var(--body); font-weight: 600; margin: 0 0 1rem; }
+  .fact { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .9rem 0; border-top: 1px solid var(--line); }
+  .fact .name { font-size: var(--small); color: var(--muted); }
+  .fact .name b { display: block; color: var(--text); font-size: var(--body); }
+  .val { font-size: var(--big); font-weight: 700; line-height: 1; color: var(--b); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .live .val { animation: pop 6s ease-out infinite; }
+  @keyframes pop { 0% { opacity: 0; transform: translateY(6px); } 12%, 100% { opacity: 1; transform: none; } }
+  .note { font-size: var(--small); color: var(--muted); margin: .6rem 0 0; }
+  .ctl { display: flex; justify-content: flex-end; }
+
+  .paused * { animation-play-state: paused !important; }
+  .still * { animation-delay: -9.5s !important; animation-play-state: paused !important; }
+  .still .res * { animation-delay: -5.9s !important; }
+
+  @media (max-width: 560px) {
+    :root { --big: 1.4rem; }
+    .scene { grid-template-columns: 1fr; gap: .8rem; }
+    .mid { justify-content: center; }
+    .mid .ar { transform: rotate(90deg); }
+    .step { height: 3em; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="demo">
+  <div class="top">
+    <a class="btn back" id="back" href="#">← back to project</a>
+    <a class="btn" id="code" href="#">code</a>
+  </div>
+
+  <h1><span>Footnote</span> — answers questions from your documents, with sources</h1>
+  <p class="sub">It reads headings, tables and images in your files, and every answer points to the exact page.</p>
+
+  <section class="card idea">
+    <h2>How it works</h2>
+    <div class="scene">
+      <div>
+        <div class="lbl">handbook.pdf <span>· page 14</span></div>
+        <div class="page">
+          <div class="part h p1"></div>
+          <div class="part p2"><div class="ln q1"></div><div class="ln short" style="margin-top:4px"></div></div>
+          <div class="part tbl p3"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="part img p4"><i style="height:40%"></i><i style="height:75%"></i><i style="height:55%"></i><i style="height:95%"></i></div>
+        </div>
+      </div>
+      <div class="mid"><span class="ar">→</span><div class="hub">Footnote</div><span class="ar">→</span></div>
+      <div style="display:grid">
+        <div class="lbl">Postgres</div>
+        <div class="db">
+          <div class="el e1"><b>heading</b><em>page 14</em></div>
+          <div class="el e2"><b>text</b><em>page 14</em></div>
+          <div class="el e3"><b>table · rows and columns kept</b><em>page 14</em></div>
+          <div class="el vis e4"><b>image · chart described</b><em>page 14</em></div>
+        </div>
+        <div class="ans">answer · quote from handbook.pdf, page 14</div>
+      </div>
+    </div>
+    <div class="step">
+      <p class="t1"><span>1</span>You upload a PDF page with a heading, text, a table and a chart.</p>
+      <p class="t2"><span>2</span>Footnote reads each part as what it is. A vision model <b>describes the chart</b>.</p>
+      <p class="t3"><span>3</span>Every part is stored in Postgres with its page number, ready to search.</p>
+      <p class="t4"><span>4</span>Answers quote the exact passage and page, checked against the source.</p>
+    </div>
+  </section>
+
+  <section class="card res">
+    <h2>The result</h2>
+    <p class="q">How well and how fast does it find the right passage?</p>
+    <div class="fact">
+      <div class="name"><b>Right passages in the top 10 results</b>300 science questions</div>
+      <div class="val">84%</div>
+    </div>
+    <div class="fact">
+      <div class="name"><b>Time to search 100,000 passages</b>per question</div>
+      <div class="val">368 ms</div>
+    </div>
+    <p class="note">Measured on the SciFact benchmark. Search time covers 95% of questions. Reads PDF, DOCX, HTML and Markdown, up to 2,000 pages per file by default.</p>
+  </section>
+
+  <div class="ctl"><button class="btn" id="play" type="button">❚❚ pause</button></div>
+</div>
+<script>
+  document.getElementById("back").href = SITE.replace(/\/$/, "") + "/projects/" + PROJECT + "/";
+  document.getElementById("code").href = REPO;
+
+  const demo = document.getElementById("demo");
+  const btn = document.getElementById("play");
+  let running = false;
+
+  function start() {
+    demo.classList.remove("still", "paused");
+    demo.classList.add("live");
+    running = true;
+    btn.textContent = "❚❚ pause";
+  }
+  function pause() {
+    running = false;
+    demo.classList.add("paused");
+    btn.textContent = "▶ play";
+  }
+  btn.addEventListener("click", function () { running ? pause() : start(); });
+
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    demo.classList.add("live", "still");
+    btn.textContent = "▶ play";
+  } else {
+    start();
+  }
+</script>
+</body>
+</html>
