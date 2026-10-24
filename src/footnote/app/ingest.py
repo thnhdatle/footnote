@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from enum import StrEnum
 from typing import Any
 
+from footnote.app.prompts_loader import load_image_prompt
 from footnote.app.webhooks import WebhookNotifier
 from footnote.domain.chunking import ChunkDiff, chunk_elements, diff_hashes
 from footnote.domain.documents import (
@@ -20,7 +21,9 @@ from footnote.domain.documents import (
     DocumentId,
     DocumentStatus,
     Element,
+    ElementKind,
     Membership,
+    ParsedDocument,
     SwapResult,
     VersionId,
     VersionRecord,
@@ -39,6 +42,7 @@ from footnote.domain.ports import (
     CollectionRepository,
     DocumentRepository,
     EmbedderFactory,
+    ImageDescriber,
     IndexRepository,
     Parser,
     SpaceReader,
@@ -54,6 +58,7 @@ _MAX_ERROR_CHARS = 500
 _TRANSIENT = (UpstreamError, UnavailableError, ConflictError)
 
 type StageObserver = Callable[[str, float], None]
+type ImageObserver = Callable[[DocumentId, DomainError | None], None]
 
 
 class IngestStatus(StrEnum):
@@ -83,6 +88,7 @@ class IngestDeps:
     webhooks: WebhookNotifier
     clock: Clock
     tenants: TenantReader | None = None
+    vision: ImageDescriber | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +131,17 @@ def memberships_for(
     ]
 
 
+def with_descriptions(
+    elements: Sequence[Element], descriptions: Mapping[int, str]
+) -> list[Element]:
+    kept = [
+        replace(e, text=descriptions[e.order]) if e.kind is ElementKind.IMAGE else e
+        for e in elements
+        if e.kind is not ElementKind.IMAGE or e.order in descriptions
+    ]
+    return [replace(e, order=n) for n, e in enumerate(kept)]
+
+
 def page_count(elements: Sequence[Element]) -> int | None:
     pages = [p for e in elements for p in (e.page, e.page_to) if p is not None]
     return max(pages) if pages else None
@@ -150,10 +167,12 @@ class IngestService:
         deps: IngestDeps,
         config: IngestConfig | None = None,
         on_stage: StageObserver | None = None,
+        on_image: ImageObserver | None = None,
     ) -> None:
         self._d = deps
         self._cfg = config or IngestConfig()
         self._on_stage = on_stage
+        self._on_image = on_image
 
     async def ingest(
         self, tenant: TenantId, target: IngestTarget, *, last_attempt: bool = False
@@ -225,12 +244,29 @@ class IngestService:
         start = self._d.clock.monotonic()
         with tracer().start_as_current_span("parse"):
             data = await self._d.documents.source(tenant, version.id)
-            elements = (await self._d.parser.parse(version.media_type, data)).elements
+            parsed = await self._d.parser.parse(version.media_type, data)
         self._stage("parse", start)
+        elements = await self._describe(version.document_id, parsed)
         await self._d.documents.store_elements(
             tenant, version.id, elements, pages=page_count(elements)
         )
         return elements
+
+    async def _describe(self, document_id: DocumentId, parsed: ParsedDocument) -> list[Element]:
+        descriptions: dict[int, str] = {}
+        if self._d.vision is not None and parsed.images:
+            prompt = load_image_prompt()
+            start = self._d.clock.monotonic()
+            with tracer().start_as_current_span("describe images"):
+                for image in parsed.images:
+                    try:
+                        descriptions[image.order] = await self._d.vision.describe(image, prompt)
+                    except DomainError as exc:
+                        self._image(document_id, exc)
+                    else:
+                        self._image(document_id, None)
+            self._stage("describe", start)
+        return with_descriptions(parsed.elements, descriptions)
 
     async def _check_quota(
         self, tenant: TenantId, document_id: DocumentId, drafts: Sequence[ChunkDraft]
@@ -335,6 +371,10 @@ class IngestService:
         await self._d.webhooks.notify(
             tenant, collection, WebhookEvent.DOCUMENT_FAILED, version, error=error
         )
+
+    def _image(self, document_id: DocumentId, error: DomainError | None) -> None:
+        if self._on_image is not None:
+            self._on_image(document_id, error)
 
     def _stage(self, stage: str, start: float) -> None:
         if self._on_stage is not None:

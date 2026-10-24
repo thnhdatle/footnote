@@ -27,6 +27,7 @@ from footnote.domain.documents import (
     Membership,
     NewCollection,
     NewUpload,
+    PageImage,
     ParsedDocument,
     SwapResult,
     UploadResult,
@@ -1170,6 +1171,9 @@ class FakeTenants:
             self.db.vectors.pop(key)
 
 
+IMAGE_BLOCK = "[image]"
+
+
 class FakeParser:
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
@@ -1180,12 +1184,15 @@ class FakeParser:
         if self.error is not None:
             raise self.error
         blocks = [b.strip() for b in data.decode().split("\n\n") if b.strip()]
-        return ParsedDocument(
-            [
-                Element(ElementKind.PARAGRAPH, b, n, page=n + 1, page_to=n + 1)
-                for n, b in enumerate(blocks)
-            ]
-        )
+        elements: list[Element] = []
+        images: list[PageImage] = []
+        for n, block in enumerate(blocks):
+            if block == IMAGE_BLOCK:
+                elements.append(Element(ElementKind.IMAGE, "", n, page=n + 1, page_to=n + 1))
+                images.append(PageImage(n, n + 1, "image/png", f"image {n}".encode()))
+            else:
+                elements.append(Element(ElementKind.PARAGRAPH, block, n, page=n + 1, page_to=n + 1))
+        return ParsedDocument(elements, images)
 
 
 class WordCounter:

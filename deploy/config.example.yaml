@@ -40,6 +40,15 @@ llm:
   max_tokens: 512                         # completion cap
   timeout: 120s                           # per request
   max_retries: 2                          # on 429, 5xx and transport errors
+vision:
+  base_url: ""                            # FOOTNOTE_VISION_BASE_URL; "" disables PDF image descriptions
+  model: ""                               # chat model with image input; required when base_url is set
+  api_key_file: ""                        # file with the key; or FOOTNOTE_VISION_API_KEY
+  timeout: 60s                            # per image
+  max_tokens: 512                         # description cap
+  min_image_px: 64                        # smaller images are skipped
+  max_images: 50                          # per document
+  max_images_per_page: 10                 # per page
 embedding:
   default_space: bge-small-en-v1.5-onnx   # must be one of spaces
   spaces:                                 # registered at startup via footnote_register_space

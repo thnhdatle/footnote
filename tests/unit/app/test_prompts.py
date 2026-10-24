@@ -8,7 +8,7 @@ from uuid import UUID
 import pytest
 
 from footnote.app import prompts_loader
-from footnote.app.prompts_loader import available_templates, load_template
+from footnote.app.prompts_loader import available_templates, load_image_prompt, load_template
 from footnote.domain.documents import ChunkId, DocumentId
 from footnote.domain.errors import ValidationError
 from footnote.domain.retrieval import Hit
@@ -21,6 +21,13 @@ def _hit(n: int, title: str, path: tuple[str, ...], text: str) -> Hit:
 def test_available_templates_contains_answer_v1() -> None:
     assert "answer_v1" in available_templates()
     assert available_templates() == sorted(available_templates())
+
+
+def test_image_prompt_is_plain_text_and_not_an_answer_template() -> None:
+    prompt = load_image_prompt()
+    assert "readable text" in prompt
+    assert "markdown" in prompt
+    assert all("image" not in name for name in available_templates())
 
 
 def test_load_template_has_system_and_user_sections() -> None:

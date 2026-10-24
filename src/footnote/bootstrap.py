@@ -26,6 +26,7 @@ from structlog.typing import FilteringBoundLogger
 from footnote.adapters.embedders import DefaultEmbedderFactory, OpenAICompatDefaults
 from footnote.adapters.llm.client import LLMConfig, OpenAICompatLLM
 from footnote.adapters.llm.probe import models_endpoint_problems
+from footnote.adapters.llm.vision import OpenAICompatVision
 from footnote.adapters.models import (
     Manifest,
     ModelNeed,
@@ -73,6 +74,7 @@ from footnote.app.reindex import ReindexService
 from footnote.app.search import SearchConfig, SearchService
 from footnote.app.webhooks import WebhookNotifier
 from footnote.config import ConfigError, Settings
+from footnote.domain.documents import DocumentId
 from footnote.domain.embedding import EmbeddingSpace, SpaceSpec
 from footnote.domain.errors import DomainError, ValidationError
 from footnote.domain.jobs import ClaimedJob, JobKind
@@ -333,6 +335,7 @@ class _Ml:
     tokenizers: ManifestTokenizers
     reranker: Reranker | None
     llm: OpenAICompatLLM
+    vision: OpenAICompatVision | None
 
 
 def make_reranker(
@@ -384,7 +387,8 @@ async def _ml(
     llm_client = httpx.AsyncClient(timeout=settings.llm.timeout)
     stack.push_async_callback(llm_client.aclose)
     llm = OpenAICompatLLM(_llm_config(settings), llm_client)
-    return _Ml(served, ManifestTokenizers(manifest, settings.models.dir), reranker, llm)
+    tokenizers = ManifestTokenizers(manifest, settings.models.dir)
+    return _Ml(served, tokenizers, reranker, llm, _vision(settings, llm_client))
 
 
 def _llm_config(settings: Settings) -> LLMConfig:
@@ -400,6 +404,20 @@ def _llm_config(settings: Settings) -> LLMConfig:
         timeout=c.timeout,
         max_retries=c.max_retries,
     )
+
+
+def _vision(settings: Settings, client: httpx.AsyncClient) -> OpenAICompatVision | None:
+    v = settings.vision
+    if not v.base_url.strip():
+        return None
+    config = LLMConfig(
+        base_url=v.base_url,
+        model=v.model,
+        api_key=v.api_key.get_secret_value(),
+        max_tokens=v.max_tokens,
+        timeout=v.timeout,
+    )
+    return OpenAICompatVision(OpenAICompatLLM(config, client))
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,11 +444,15 @@ def _repos(pools: Pools) -> _Repos:
 
 def _parse_limits(settings: Settings) -> ParseLimits:
     i = settings.ingest
+    v = settings.vision
     return ParseLimits(
         max_pages=i.max_pages,
         max_uncompressed_bytes=i.max_uncompressed_bytes,
         max_archive_members=i.max_archive_members,
         parse_timeout=i.parse_timeout,
+        max_images=v.max_images if v.base_url.strip() else 0,
+        max_images_per_page=v.max_images_per_page,
+        min_image_px=v.min_image_px,
     )
 
 
@@ -447,6 +469,7 @@ def _ingest(settings: Settings, repos: _Repos, ml: _Ml, metrics: Metrics) -> Ing
         WebhookNotifier(repos.jobs, clock),
         clock,
         repos.tenants,
+        ml.vision,
     )
     config = IngestConfig(
         gc_grace=timedelta(seconds=settings.ingest.gc_grace),
@@ -454,10 +477,19 @@ def _ingest(settings: Settings, repos: _Repos, ml: _Ml, metrics: Metrics) -> Ing
         batch_size=settings.embedding.batch_size,
     )
 
+    log = make_logger(settings.log, component="ingest")
+
     def on_stage(stage: str, seconds: float) -> None:
         metrics.ingest_duration.labels(stage).observe(seconds)
 
-    return IngestService(deps, config, on_stage=on_stage)
+    def on_image(document_id: DocumentId, error: DomainError | None) -> None:
+        if error is None:
+            metrics.observe_image("described")
+            return
+        metrics.observe_image("failed")
+        log.warning("image description failed", document_id=str(document_id), error=error.message)
+
+    return IngestService(deps, config, on_stage=on_stage, on_image=on_image)
 
 
 def _reembed(settings: Settings, repos: _Repos, ml: _Ml) -> ReembedService:

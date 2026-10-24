@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 from footnote import bootstrap
@@ -524,3 +525,22 @@ def test_make_reranker_builds_the_requested_variant() -> None:
     assert fp32.model_key == entry.variants["fp32"].sha256
     assert configured.model_key != fp32.model_key
     assert bootstrap.make_reranker(_settings(FOOTNOTE_RERANK_PROVIDER="noop"), manifest) is None
+
+
+async def test_vision_is_off_without_a_base_url() -> None:
+    settings = _settings()
+    async with httpx.AsyncClient() as client:
+        assert bootstrap._vision(settings, client) is None
+    assert bootstrap._parse_limits(settings).max_images == 0
+
+
+async def test_vision_on_sets_the_image_limits() -> None:
+    settings = _settings(
+        FOOTNOTE_VISION_BASE_URL="http://vision.test/v1",
+        FOOTNOTE_VISION_MODEL="vl",
+        FOOTNOTE_VISION_MAX_IMAGES_PER_PAGE="3",
+    )
+    async with httpx.AsyncClient() as client:
+        assert bootstrap._vision(settings, client) is not None
+    limits = bootstrap._parse_limits(settings)
+    assert (limits.max_images, limits.max_images_per_page, limits.min_image_px) == (50, 3, 64)

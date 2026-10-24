@@ -11,6 +11,7 @@ METRIC_NAMES = [
     "footnote_ingest_jobs_total",
     "footnote_jobs_queue_depth",
     "footnote_ingest_duration_seconds",
+    "footnote_ingest_images_total",
     "footnote_search_duration_seconds",
     "footnote_answers_total",
     "footnote_embedding_requests_total",
@@ -66,6 +67,7 @@ def test_helpers_and_histograms() -> None:
     m.observe_embedding("openai_compat", 5)
     m.observe_answer("abstained")
     m.observe_exact_scan("fallback")
+    m.observe_image("failed")
     m.embedding_truncated.inc()
     m.http_requests.labels("/v1/search", "POST", "200").inc()
     m.http_duration.labels("/v1/search").observe(0.02)
@@ -77,6 +79,7 @@ def test_helpers_and_histograms() -> None:
     assert sample(m, "footnote_embedding_texts_total", provider="openai_compat") == 5
     assert sample(m, "footnote_answers_total", outcome="abstained") == 1
     assert sample(m, "footnote_search_exact_scan_total", reason="fallback") == 1
+    assert sample(m, "footnote_ingest_images_total", outcome="failed") == 1
     assert sample(m, "footnote_embedding_truncated_total") == 1
     assert sample(m, "footnote_jobs_queue_depth", kind="ingest") == 4
     assert sample(m, "footnote_search_duration_seconds_count", stage="rerank") == 1

@@ -148,6 +148,24 @@ class LLMSection(_Section):
         return self
 
 
+class VisionSection(_Section):
+    base_url: str = ""
+    model: str = ""
+    api_key: SecretStr = secret_field()
+    api_key_file: str = ""
+    timeout: Duration = 60.0
+    max_tokens: int = Field(default=512, ge=1, le=131072)
+    min_image_px: int = Field(default=64, ge=1)
+    max_images: int = Field(default=50, ge=0)
+    max_images_per_page: int = Field(default=10, ge=1)
+
+    @model_validator(mode="after")
+    def _model_with_base_url(self) -> VisionSection:
+        if self.base_url.strip() and not self.model.strip():
+            raise ValueError("model is required when base_url is set")
+        return self
+
+
 class SpaceConfig(_Section):
     name: str
     provider: Literal["onnx_local", "openai_compat"]
@@ -330,6 +348,7 @@ class Settings(BaseSettings):
     tenancy: TenancyConfig = Field(default_factory=TenancyConfig)
     collections: CollectionsConfig = Field(default_factory=CollectionsConfig)
     llm: LLMSection = Field(default_factory=LLMSection)
+    vision: VisionSection = Field(default_factory=VisionSection)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     rerank: RerankConfig = Field(default_factory=RerankConfig)

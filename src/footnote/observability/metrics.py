@@ -22,6 +22,7 @@ INGEST_BUCKETS: Final = (0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 60.0, 300.0, 900.
 type Outcome = Literal["answered", "abstained", "unsupported", "error"]
 type ScanReason = Literal["small_collection", "fallback"]
 type JobStatus = Literal["succeeded", "failed", "retried", "cancelled"]
+type ImageOutcome = Literal["described", "failed"]
 
 
 class Metrics:
@@ -60,6 +61,12 @@ class Metrics:
             "Ingest duration by stage.",
             ["stage"],
             buckets=INGEST_BUCKETS,
+            registry=r,
+        )
+        self.ingest_images = Counter(
+            "footnote_ingest_images_total",
+            "PDF images sent to the vision model, by outcome.",
+            ["outcome"],
             registry=r,
         )
         self.search_duration = Histogram(
@@ -105,6 +112,9 @@ class Metrics:
         self.jobs.labels(kind, status).inc()
         if kind == "ingest":
             self.ingest_jobs.labels(status).inc()
+
+    def observe_image(self, outcome: ImageOutcome) -> None:
+        self.ingest_images.labels(outcome).inc()
 
     def observe_embedding(self, provider: str, texts: int) -> None:
         self.embedding_requests.labels(provider).inc()

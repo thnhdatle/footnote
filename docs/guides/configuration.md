@@ -27,6 +27,7 @@ file.
 | `FOOTNOTE_ADMIN_DATABASE_URL` | owner role connection URL | `admin_database.url_file` |
 | `FOOTNOTE_AUTH_ADMIN_KEY` | admin API key | `auth.admin_key_file` |
 | `FOOTNOTE_LLM_API_KEY` | LLM provider key | `llm.api_key_file` |
+| `FOOTNOTE_VISION_API_KEY` | vision provider key | `vision.api_key_file` |
 | `FOOTNOTE_EMBEDDING_API_KEY` | embedding provider key | `embedding.api_key_file` |
 
 ## Units
@@ -140,6 +141,20 @@ production.
 | `llm.max_tokens` | `512` | `FOOTNOTE_LLM_MAX_TOKENS` | completion cap |
 | `llm.timeout` | `120s` | `FOOTNOTE_LLM_TIMEOUT` | per request |
 | `llm.max_retries` | `2` | `FOOTNOTE_LLM_MAX_RETRIES` | retries on 429, 5xx, network errors |
+
+### `vision`
+
+| Option | Default | Environment variable | Description |
+|---|---|---|---|
+| `vision.base_url` | `""` | `FOOTNOTE_VISION_BASE_URL` | chat endpoint with image input; empty disables PDF image descriptions |
+| `vision.model` | `""` | `FOOTNOTE_VISION_MODEL` | model name; required with `vision.base_url` |
+| `vision.api_key` | none | `FOOTNOTE_VISION_API_KEY` | secret: env var or `_file` only |
+| `vision.api_key_file` | `""` | `FOOTNOTE_VISION_API_KEY_FILE` | file with the key |
+| `vision.timeout` | `60s` | `FOOTNOTE_VISION_TIMEOUT` | per image |
+| `vision.max_tokens` | `512` | `FOOTNOTE_VISION_MAX_TOKENS` | description cap |
+| `vision.min_image_px` | `64` | `FOOTNOTE_VISION_MIN_IMAGE_PX` | images narrower or shorter are skipped |
+| `vision.max_images` | `50` | `FOOTNOTE_VISION_MAX_IMAGES` | images described per document |
+| `vision.max_images_per_page` | `10` | `FOOTNOTE_VISION_MAX_IMAGES_PER_PAGE` | images described per page |
 
 ### `embedding`
 

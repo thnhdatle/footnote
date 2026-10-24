@@ -125,6 +125,8 @@ def test_domain_bound_violations_reported_together(tmp_path: Path) -> None:
         ("server: {listen: '127.0.0.1:99999'}", "port"),
         ("llm: {temperature: 3}", "temperature"),
         ("llm: {base_url: 'http://h/v1'}", "model is required"),
+        ("vision: {base_url: 'http://h/v1'}", "vision: model is required"),
+        ("vision: {max_images_per_page: 0}", "max_images_per_page"),
         ("database: {pool_max: 0}", "pool_max"),
         ("embedding: {hnsw: {m: 16, ef_construction: 16}}", "ef_construction"),
         ("embedding: {default_space: nope}", "default_space"),
@@ -187,6 +189,7 @@ def test_env_names_are_unique_and_secrets_known() -> None:
         "FOOTNOTE_ADMIN_DATABASE_URL",
         "FOOTNOTE_AUTH_ADMIN_KEY",
         "FOOTNOTE_LLM_API_KEY",
+        "FOOTNOTE_VISION_API_KEY",
         "FOOTNOTE_EMBEDDING_API_KEY",
     }
 

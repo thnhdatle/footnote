@@ -1,0 +1,1 @@
+Describe this image from a document. Say what kind of image it is and what it shows, including any values, labels, trends or steps. Then give any readable text in it, word for word. Write plain text without markdown. Do not guess at details you cannot see.

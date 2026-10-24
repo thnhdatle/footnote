@@ -23,7 +23,8 @@ from footnote.domain.documents import (
     VersionId,
 )
 from footnote.domain.embedding import EmbeddingSpace
-from footnote.domain.ports import Embedder
+from footnote.domain.errors import DomainError
+from footnote.domain.ports import Embedder, ImageDescriber
 from footnote.domain.settings import ChunkingSettings, ChunkingStrategyName, CollectionSettings
 from footnote.domain.tenancy import Quotas, TenantId
 from footnote.domain.webhooks import WebhookSettings
@@ -106,6 +107,7 @@ class Rig:
     gc: GcService
     handlers: JobHandlers
     stages: list[str]
+    image_errors: list[DomainError | None]
 
     async def upload(
         self, texts: Sequence[str], *, external_id: str = "doc", title: str = "Doc"
@@ -149,6 +151,7 @@ def build(  # noqa: PLR0913 - test rig knobs
     quotas: Quotas | None = None,
     parser_error: Exception | None = None,
     reembed_config: ReembedConfig | None = None,
+    vision: ImageDescriber | None = None,
 ) -> Rig:
     db = FakeDb()
     db.add_space(SPACE_A)
@@ -164,6 +167,7 @@ def build(  # noqa: PLR0913 - test rig knobs
     embedders = RecordingEmbedders()
     clock = FakeClock()
     stages: list[str] = []
+    image_errors: list[DomainError | None] = []
     settings = CollectionSettings(
         chunking=CHUNKING, embedding_space=SPACE_A.name, webhook=events or WebhookSettings()
     )
@@ -181,9 +185,11 @@ def build(  # noqa: PLR0913 - test rig knobs
             notifier,
             clock,
             tenants,
+            vision,
         ),
         IngestConfig(gc_grace=GC_GRACE, retain_originals=retain_originals, batch_size=2),
         on_stage=lambda stage, _seconds: stages.append(stage),
+        on_image=lambda _document_id, error: image_errors.append(error),
     )
     reindex = ReindexService(collections, documents, page_size=2)
     reembed = ReembedService(
@@ -216,6 +222,7 @@ def build(  # noqa: PLR0913 - test rig knobs
         gc,
         handlers,
         stages,
+        image_errors,
     )
 
 

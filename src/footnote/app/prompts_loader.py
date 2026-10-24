@@ -14,6 +14,7 @@ from footnote.domain.ports import ChatMessage
 from footnote.domain.retrieval import Hit
 
 _SECTION = re.compile(r"^## (system|user)\s*$", re.MULTILINE)
+_IMAGE_PROMPT = "describe_image_v1.txt"
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,13 @@ class PromptTemplate:
 def available_templates() -> list[str]:
     root = resources.files("footnote.app.prompts")
     return sorted(p.name[:-3] for p in root.iterdir() if p.name.endswith(".md"))
+
+
+def load_image_prompt() -> str:
+    """Loads the prompt that asks the vision model for an image description."""
+    return (
+        resources.files("footnote.app.prompts").joinpath(_IMAGE_PROMPT).read_text("utf-8").strip()
+    )
 
 
 def load_template(name: str) -> PromptTemplate:
