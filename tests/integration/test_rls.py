@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Raw-SQL RLS isolation as footnote_app."""
 
 from __future__ import annotations
 
@@ -32,7 +31,6 @@ APP_TABLES = (
 
 @pytest_asyncio.fixture
 async def two(admin_db: Database, app_db: Database) -> AsyncIterator[tuple[World, World]]:
-    """Tenants A and B, each with rows in every tenant table."""
     a = await seed(admin_db, app_db, "rls-a", ["alpha one", "alpha two"])
     b = await seed(admin_db, app_db, "rls-b", ["bravo one", "bravo two", "bravo three"])
     yield a, b
@@ -113,7 +111,6 @@ async def test_insert_referencing_another_tenants_ids_fails(
     a, b = two
     async with await psycopg.AsyncConnection.connect(pg.app, autocommit=True) as conn:
         await conn.execute("SELECT set_config('footnote.tenant_id', %s, false)", (str(b.tenant),))
-        # Own tenant id, foreign parent id: the composite FK finds no (B, A-id) parent.
         with pytest.raises(psycopg.errors.ForeignKeyViolation):
             await conn.execute(
                 "INSERT INTO footnote.documents (tenant_id, id, collection_id, external_id) "
@@ -126,7 +123,6 @@ async def test_insert_referencing_another_tenants_ids_fails(
                 "VALUES (%s, %s, 99, %s)",
                 (b.tenant, b.version_id, a.chunk_ids[0]),
             )
-        # Foreign tenant id: WITH CHECK rejects the row.
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             await conn.execute(
                 "INSERT INTO footnote.jobs (tenant_id, id, kind) "

@@ -1,46 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`footnote eval answers`: faithfulness and citation precision of generated answers.
-
-Items are the first N distinct query ids of the dataset's `qrels/test.tsv` (file order); the
-question is "Is the following claim supported by the documents? Explain with citations:
-<claim>". A first pass generates every answer through the app-layer `AnswerService` (so the
-evidence gate and the citation verifier apply); a second pass judges each answered item with one
-judge call (LM Studio loads one model at a time, hence two passes). The judge gets the rubric
-`eval/prompts/faithfulness.md` as the system message and the answer split into numbered
-sentences (`domain.citations.split_sentences`), each with its cited chunk texts, as the user
-message, and returns strict JSON per sentence. Reasoning output is stripped and a
-```json fence is tolerated; invalid JSON is retried once, then every sentence of the item
-counts unsupported and `judge_parse_failures` is incremented.
-
-Metrics are over answered items only. A sentence counts as supported when the judge labels it
-`supported` and at least one of its citations has `supports` true; a sentence without
-citations is unsupported unless labelled `non_factual`. faithfulness = supported sentences /
-sentences not labelled `non_factual`; citation precision = citations with `supports` true /
-all citations of the answers.
-
-Wiring into the CLI (`cli_eval.py`), inside an `eval_app.command("answers")` function::
-
-    from footnote.adapters.llm.client import OpenAICompatLLM
-    from footnote.app.evaluation.answers import eval_answers
-    from footnote.adapters.llm.client import LLMConfig
-
-    async with open_eval_runtime(settings) as rt:
-        c = settings.llm  # same endpoint and options; only the model (and a larger budget) differ
-        cfg = LLMConfig(
-            base_url=c.base_url, model=judge_model, api_key=c.api_key.get_secret_value(),
-            extra_headers=dict(c.extra_headers), extra_body=dict(c.extra_body),
-            temperature=0.0, max_tokens=2048, timeout=c.timeout, max_retries=c.max_retries,
-        )
-        async with httpx.AsyncClient(timeout=settings.llm.timeout) as client:
-            judge = OpenAICompatLLM(cfg, client)
-            result = await eval_answers(
-                rt, load_beir(dataset_dir(name), name), limit=limit, judge=judge,
-                judge_model=judge_model, out_dir=output_dir / run_id, run_id=run_id,
-                log=_log,
-            )
-
-The CLI must print `result.faithfulness` etc. and `out_dir/summary.md`.
-"""
+"""Evaluates faithfulness and citation precision of generated answers."""
 
 from __future__ import annotations
 
@@ -98,29 +57,21 @@ def _quiet(_message: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class Generated:
-    """What the evaluation needs of one generated answer."""
-
     answer: Answer
     hits: Sequence[Hit]
 
 
 class Generator(Protocol):
-    """Generates one answer for a question (`AnswerGenerator` over `AnswerService`)."""
-
-    async def generate(self, question: str) -> Generated:
-        """Answer `question` in the evaluation collection."""
+    async def generate(self, question: str) -> Generated: ...
 
 
 class AnswerGenerator:
-    """`AnswerService.answer` bound to a tenant and collection."""
-
     def __init__(self, service: AnswerService, tenant: TenantId, collection: CollectionId) -> None:
         self._service = service
         self._tenant = tenant
         self._collection = collection
 
     async def generate(self, question: str) -> Generated:
-        """Run the full answer pipeline (search, gate, LLM, citation verification)."""
         outcome = await self._service.answer(
             self._tenant, self._collection, AnswerRequest(question)
         )
@@ -129,16 +80,12 @@ class AnswerGenerator:
 
 @dataclass(frozen=True, slots=True)
 class SentenceVerdict:
-    """The judge's verdict for one sentence."""
-
     label: str
     supports: dict[int, bool]
 
 
 @dataclass(frozen=True, slots=True)
 class ItemResult:
-    """Counts of one item (answered items carry sentence counts)."""
-
     query_id: str
     abstained: bool
     unsupported: bool = False
@@ -152,8 +99,6 @@ class ItemResult:
 
 @dataclass(frozen=True, slots=True)
 class AnswerEvalResult:
-    """Metrics of a run; ratios are None when their denominator is zero."""
-
     items: list[ItemResult]
     generator_model: str
     judge_model: str
@@ -171,7 +116,6 @@ class AnswerEvalResult:
 
     @property
     def same_model(self) -> bool:
-        """True when judge and generator are the same model."""
         return self.judge_model == self.generator_model
 
 
@@ -185,12 +129,10 @@ class _Prepared:
 
 
 def question_for(claim: str) -> str:
-    """The generation question for a claim."""
     return f"{QUESTION_TEMPLATE}{claim}"
 
 
 def select_items(dataset: BeirDataset, limit: int) -> list[tuple[str, str]]:
-    """First `limit` distinct test query ids (qrels order) with their claim text."""
     items: list[tuple[str, str]] = []
     for qid in query_ids(dataset, SPLIT)[:limit]:
         text = dataset.queries.get(qid)
@@ -218,7 +160,6 @@ def _prepare(query_id: str, generated: Generated) -> _Prepared:
 
 
 def render_judge_input(prepared: _Prepared) -> str:
-    """The numbered sentences, each followed by the chunks it cites."""
     lines = ["Answer sentences:", ""]
     for i, (sentence, numbers) in enumerate(
         zip(prepared.sentences, prepared.cited, strict=True), 1
@@ -234,7 +175,6 @@ def render_judge_input(prepared: _Prepared) -> str:
 
 
 def _load_json(text: str) -> Any:
-    """JSON of a judge reply (reasoning and a fence stripped); None when there is none."""
     body = strip_reasoning(text).strip()
     fence = _FENCE_RE.search(body)
     if fence:
@@ -265,7 +205,6 @@ def _verdict(entry: object) -> tuple[int, SentenceVerdict] | None:
 
 
 def parse_judgement(text: str, cited: Sequence[Sequence[int]]) -> list[SentenceVerdict] | None:
-    """Parse the judge reply into one verdict per sentence; None when it is not valid."""
     data = _load_json(text)
     entries = data.get("sentences") if isinstance(data, dict) else None
     if not isinstance(entries, list):
@@ -284,7 +223,6 @@ def parse_judgement(text: str, cited: Sequence[Sequence[int]]) -> list[SentenceV
 def score_item(
     prepared: _Prepared, verdicts: list[SentenceVerdict] | None, *, parse_failure: bool = False
 ) -> ItemResult:
-    """Count one item; `verdicts` None means every sentence is unsupported."""
     supported = non_factual = cites = cites_ok = 0
     for i, numbers in enumerate(prepared.cited):
         cites += len(numbers)
@@ -311,7 +249,6 @@ def score_item(
 
 
 async def judge_item(judge: LLM, rubric: str, prepared: _Prepared) -> ItemResult:
-    """One judge call (retried once on invalid JSON) for one answered item."""
     if not prepared.sentences:
         return score_item(prepared, [])
     messages = [ChatMessage("system", rubric), ChatMessage("user", render_judge_input(prepared))]
@@ -344,7 +281,7 @@ async def run_answer_eval(  # noqa: PLR0913 - the run inputs
     notes: Sequence[str] = (),
     log: Log = _quiet,
 ) -> AnswerEvalResult:
-    """Generate every answer, then judge each answered one; write `answers.csv`/`summary.md`."""
+    """Generates every answer, judges the answered ones and writes the outputs."""
     rubric_text = rubric if rubric is not None else PROMPT_PATH.read_text(encoding="utf-8")
     generated: list[tuple[str, Generated]] = []
     for n, (qid, claim) in enumerate(items, 1):
@@ -390,7 +327,6 @@ def _fmt(value: float | None) -> str:
 
 
 def write_outputs(out_dir: Path, result: AnswerEvalResult) -> None:
-    """Write `answers.csv` and `summary.md` into `out_dir`."""
     out_dir.mkdir(parents=True, exist_ok=True)
     with (out_dir / ANSWERS_CSV).open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
@@ -455,9 +391,7 @@ async def eval_answers(  # noqa: PLR0913 - the run inputs
     log: Log = _quiet,
     generator: Callable[[TenantId, CollectionId], Generator] | None = None,
 ) -> AnswerEvalResult:
-    """Index `dataset` as the retrieval evaluation does (shipped chunking, English), answer
-    and judge the first `limit` test claims, write the outputs to `out_dir`;
-    the tenant is deleted unless `keep`."""
+    """Indexes the dataset and runs the answer evaluation."""
     items = select_items(dataset, limit)
     if not items:
         raise EvalError(f"dataset {dataset.name!r} has no qrels/{SPLIT}.tsv queries")

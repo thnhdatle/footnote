@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The committed OpenAPI document matches the code (drift test)."""
 
 from __future__ import annotations
 

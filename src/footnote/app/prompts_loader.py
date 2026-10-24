@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Loads and renders the versioned prompt templates in `footnote.app.prompts`."""
+"""Loads and renders the versioned prompt templates."""
 
 from __future__ import annotations
 
@@ -18,14 +18,11 @@ _SECTION = re.compile(r"^## (system|user)\s*$", re.MULTILINE)
 
 @dataclass(frozen=True, slots=True)
 class PromptTemplate:
-    """A system/user template pair; the user part takes `$context` and `$question`."""
-
     name: str
     system: str
     user: str
 
     def render(self, question: str, hits: Sequence[Hit]) -> list[ChatMessage]:
-        """Build chat messages with numbered context blocks `[1] … [k]`."""
         blocks = []
         for n, hit in enumerate(hits, start=1):
             path = " > ".join(hit.heading_path)
@@ -36,13 +33,12 @@ class PromptTemplate:
 
 
 def available_templates() -> list[str]:
-    """Names of the shipped templates."""
     root = resources.files("footnote.app.prompts")
     return sorted(p.name[:-3] for p in root.iterdir() if p.name.endswith(".md"))
 
 
 def load_template(name: str) -> PromptTemplate:
-    """Load a shipped template by name (e.g. `answer_v1`)."""
+    """Loads a shipped template by name."""
     if name not in available_templates():
         raise ValidationError("answer.prompt_template", f"unknown template {name!r}")
     text = resources.files("footnote.app.prompts").joinpath(f"{name}.md").read_text("utf-8")

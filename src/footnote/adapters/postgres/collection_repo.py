@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Collections repository over the app pool, tenant-scoped by RLS."""
+"""Collections repository."""
 
 from __future__ import annotations
 
@@ -57,14 +57,14 @@ def _record(row: dict[str, Any]) -> CollectionRecord:
 
 
 class PgCollections:
-    """CRUD on collections; other tenants' collections look absent."""
+    """Stores and reads collections."""
 
     def __init__(self, db: Database, id_factory: IdFactory = new_id) -> None:
         self._db = db
         self._new_id = id_factory
 
     async def create(self, tenant: TenantId, new: NewCollection) -> CollectionRecord:
-        """Insert a collection; ConflictError when the name is taken."""
+        """Inserts a collection."""
         cid = self._new_id()
         async with self._db.tenant_tx(tenant) as conn:
             await conn.execute(
@@ -88,7 +88,6 @@ class PgCollections:
     async def get(
         self, tenant: TenantId, collection_id: CollectionId, *, include_deleting: bool = False
     ) -> CollectionRecord:
-        """One collection; `deleting` ones are absent unless asked for."""
         async with self._db.tenant_tx(tenant) as conn:
             row = await self._select(conn, tenant, collection_id, include_deleting=include_deleting)
         return _record(require(row, _NOT_FOUND))
@@ -116,7 +115,6 @@ class PgCollections:
     async def list_page(
         self, tenant: TenantId, after: CollectionId | None, limit: int
     ) -> list[CollectionRecord]:
-        """Active collections ordered by id (keyset pagination)."""
         query = sql.SQL(
             "{} WHERE {} AND c.status = 'active' "
             "AND (%(after)s::uuid IS NULL OR c.id > %(after)s) ORDER BY c.id LIMIT %(limit)s"
@@ -126,7 +124,6 @@ class PgCollections:
         return [_record(r) for r in rows]
 
     async def count(self, tenant: TenantId) -> int:
-        """Number of collections (quota `max_collections`)."""
         query = sql.SQL("SELECT count(*) AS n FROM footnote.collections c WHERE {}").format(
             self._db.tenant_filter("c")
         )
@@ -135,7 +132,6 @@ class PgCollections:
         return int(require(row, "count")["n"])
 
     async def total_chunks(self, tenant: TenantId) -> int:
-        """Sum of `chunk_count` over the tenant's collections (quota `max_chunks`)."""
         query = sql.SQL(
             "SELECT COALESCE(sum(c.chunk_count), 0)::bigint AS n FROM footnote.collections c "
             "WHERE {}"
@@ -153,12 +149,6 @@ class PgCollections:
         webhook: tuple[str | None, str | None] | None = None,
         jobs: Sequence[NewJob] = (),
     ) -> tuple[CollectionRecord, list[JobId]]:
-        """Replace stored settings (chunking/retrieval/answer), optionally the webhook, and
-        enqueue `jobs` in the same transaction.
-
-        `language` and the space change through `set_language` / `set_target_space`
-        because they start jobs.
-        """
         query = sql.SQL(
             "UPDATE footnote.collections c SET settings = %(settings)s, "
             "webhook_url = CASE WHEN %(set_hook)s THEN %(url)s ELSE webhook_url END, "
@@ -195,7 +185,6 @@ class PgCollections:
     async def set_target_space(
         self, tenant: TenantId, collection_id: CollectionId, space_id: int | None
     ) -> CollectionRecord:
-        """Start (space id) or cancel (None) a re-embed; progress is reset."""
         query = sql.SQL(
             "UPDATE footnote.collections c SET target_space_id = %(space)s, "
             "reembed = CASE WHEN %(space)s::int IS NULL THEN NULL "
@@ -214,7 +203,6 @@ class PgCollections:
     async def set_reembed_progress(
         self, tenant: TenantId, collection_id: CollectionId, done: int, total: int
     ) -> None:
-        """Record re-embed progress `{target_space_id, done, total, state}`."""
         query = sql.SQL(
             "UPDATE footnote.collections c SET reembed = jsonb_build_object("
             "'target_space_id', c.target_space_id, 'done', %(done)s::bigint, "
@@ -229,7 +217,6 @@ class PgCollections:
     async def mark_deleting(
         self, tenant: TenantId, collection_id: CollectionId, jobs: Sequence[NewJob] = ()
     ) -> list[JobId]:
-        """Hide the collection from reads and enqueue `jobs` (its `collection_delete`), one tx."""
         query = sql.SQL(
             "UPDATE footnote.collections c SET status = 'deleting', updated_at = now() "
             "WHERE {} AND c.id = %(id)s AND c.status = 'active'"
@@ -240,7 +227,6 @@ class PgCollections:
             return await self._enqueue(conn, tenant, jobs)
 
     async def delete_rows(self, tenant: TenantId, collection_id: CollectionId) -> None:
-        """Delete the collection and (by cascade) everything in it."""
         query = sql.SQL("DELETE FROM footnote.collections c WHERE {} AND c.id = %(id)s").format(
             self._db.tenant_filter("c")
         )
@@ -250,7 +236,6 @@ class PgCollections:
     async def set_language(
         self, tenant: TenantId, collection_id: CollectionId, language: Language
     ) -> None:
-        """`fts_reconfig`: switch `language` and every chunk's `fts_config` atomically."""
         params = {"tenant": tenant, "id": collection_id, "lang": language.value}
         async with self._db.tenant_tx(tenant) as conn:
             updated = await execute(

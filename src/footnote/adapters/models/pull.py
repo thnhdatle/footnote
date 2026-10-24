@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Download of pinned model files from Hugging Face, verified before they are kept."""
+"""Download of pinned model files from Hugging Face."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ _TIMEOUT = httpx.Timeout(30.0, read=120.0)
 
 
 def file_url(entry: ModelEntry, file: ModelFile, base: str = HF_BASE) -> str:
-    """Revision-pinned download URL of a file."""
     return f"{base}/{entry.repo}/resolve/{entry.revision}/{file.path}"
 
 
@@ -50,11 +49,7 @@ def pull_model(
     *,
     client: httpx.Client | None = None,
 ) -> list[Path]:
-    """Download every missing or corrupt file of `entry`; returns the paths now present.
-
-    A download is hashed while streaming and only moved into place when it matches the
-    manifest, so a failed pull never leaves a file that verification would accept.
-    """
+    """Downloads the missing or corrupt files of a model entry."""
     return pull_files(models_dir, entry, selected_files(entry, variants), client=client)
 
 
@@ -65,7 +60,6 @@ def pull_files(
     *,
     client: httpx.Client | None = None,
 ) -> list[Path]:
-    """Download the given files of `entry` that are missing or corrupt (see `pull_model`)."""
     owned = client is None
     http = client or httpx.Client(timeout=_TIMEOUT)
     paths: list[Path] = []

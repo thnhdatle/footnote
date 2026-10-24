@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Embedding cache for evaluation runs only.
-
-One SQLite file per cache key (the model file SHA-256 for `onnx_local`, or
-`provider/model/dimensions`), rows keyed by (kind, SHA-256 of the embedded text).
-`CachingEmbedder` wraps the configured embedder; vectors are stored as little-endian
-float32 and *every* result, hit or miss, is the float32-rounded value, so results are
-identical with or without a warm cache.
-"""
+"""SQLite embedding cache for evaluation runs."""
 
 from __future__ import annotations
 
@@ -27,9 +20,6 @@ QUERY = "query"
 
 
 def cache_key_for_space(space: EmbeddingSpace, model_sha256: str | None = None) -> str:
-    """Cache key of a space. `onnx_local` needs the model file's SHA-256 from the manifest
-    (passed in: `app` must not import the adapters); other providers use
-    `provider/model/dimensions`."""
     if space.provider == "onnx_local":
         if not model_sha256:
             msg = "onnx_local cache key needs the model file sha256"
@@ -39,7 +29,6 @@ def cache_key_for_space(space: EmbeddingSpace, model_sha256: str | None = None) 
 
 
 def cache_path(cache_dir: Path, key: str) -> Path:
-    """SQLite file of `key` under `cache_dir`."""
     return cache_dir / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".sqlite")
 
 
@@ -52,11 +41,7 @@ def _round(vector: Sequence[float]) -> list[float]:
 
 
 class CachingEmbedder:
-    """`Embedder` that serves repeated texts from a SQLite cache.
-
-    With `cache_queries=False` queries go to the inner embedder (still float32-rounded),
-    so the eval's in-process search latency includes query embedding.
-    """
+    """Embedder that serves repeated texts from a SQLite cache."""
 
     def __init__(
         self, inner: Embedder, cache_dir: Path, key: str, *, cache_queries: bool = True
@@ -77,7 +62,6 @@ class CachingEmbedder:
         self._db.commit()
 
     def close(self) -> None:
-        """Close the database."""
         self._db.close()
 
     def _get(self, kind: str, digests: list[str]) -> dict[str, list[float]]:
@@ -120,11 +104,9 @@ class CachingEmbedder:
         return [list(found[d]) for d in digests]
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed chunk texts, calling the inner embedder once for the misses only."""
         return await self._embed(DOCUMENT, texts)
 
     async def embed_query(self, text: str) -> list[float]:
-        """Embed one query through the cache (or directly without `cache_queries`)."""
         if not self._cache_queries:
             return _round(await self._inner.embed_query(text))
         return (await self._embed(QUERY, [text]))[0]
@@ -135,7 +117,6 @@ def _marker(cache_dir: Path, dataset: str) -> Path:
 
 
 def mark_warm(cache_dir: Path, dataset: str, key: str, texts: int) -> None:
-    """Record that `dataset` was fully embedded into the cache of `key`."""
     path = _marker(cache_dir, dataset)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
@@ -148,7 +129,6 @@ def mark_warm(cache_dir: Path, dataset: str, key: str, texts: int) -> None:
 
 
 def is_warm(cache_dir: Path, dataset: str) -> bool:
-    """The marker exists and the cache file it names exists."""
     path = _marker(cache_dir, dataset)
     if not path.is_file():
         return False

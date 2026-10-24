@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared pytest configuration: Hypothesis profiles and a thread-leak check."""
 
 import os
 import threading
@@ -20,7 +19,6 @@ settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "default"))
 
 @pytest.fixture(autouse=True)
 def _no_leftover_threads() -> Iterator[None]:
-    """Fail a test that leaves non-daemon threads running (thread leak check)."""
     before = {t.ident for t in threading.enumerate()}
     yield
     leaked = [t.name for t in threading.enumerate() if t.ident not in before and not t.daemon]

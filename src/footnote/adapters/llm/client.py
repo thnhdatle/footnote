@@ -1,13 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Chat and streaming client for OpenAI-compatible servers (LM Studio, Triage, Ollama, ...).
-
-Retries (429, 5xx, transport errors, timeouts) happen only before the first response
-byte is consumed, with jittered exponential backoff bounded by `max_retries`; a stream
-that breaks later raises `UpstreamError` because deltas were already delivered.
-Reasoning output (`reasoning_content`, a leading `<think>` block) is dropped from
-non-streamed text; streamed deltas stay raw (the final `citations` event carries
-the cleaned answer, produced by `strip_reasoning` in the use case).
-"""
+"""Chat and streaming client for OpenAI-compatible servers."""
 
 from __future__ import annotations
 
@@ -34,8 +26,6 @@ _DONE = "[DONE]"
 
 @dataclass(frozen=True, slots=True)
 class LLMConfig:
-    """`llm.*` settings; an empty `base_url` disables the client (`configured` False)."""
-
     base_url: str = ""
     model: str = ""
     api_key: str = field(default="", repr=False)
@@ -63,10 +53,7 @@ def _retry_after(response: httpx.Response, cap: float) -> float | None:
 
 
 class OpenAICompatLLM:
-    """`domain.ports.LLM` over `POST {base_url}/chat/completions`.
-
-    The caller owns `client` (its lifecycle and transport; tests pass a mock transport).
-    """
+    """Chat client for an OpenAI-compatible server."""
 
     def __init__(
         self,
@@ -83,11 +70,10 @@ class OpenAICompatLLM:
 
     @property
     def configured(self) -> bool:
-        """False when no base URL is set."""
         return bool(self._cfg.base_url.strip())
 
     async def chat(self, messages: Sequence[ChatMessage]) -> ChatResult:
-        """Complete a chat; the text excludes reasoning output."""
+        """Completes a chat and returns the text."""
         response = await self._open(self._body(messages, stream=False))
         try:
             payload = orjson.loads(await response.aread())
@@ -107,7 +93,7 @@ class OpenAICompatLLM:
         )
 
     async def stream(self, messages: Sequence[ChatMessage]) -> AsyncIterator[ChatDelta]:
-        """Stream content deltas; the usage chunk arrives as a final delta."""
+        """Streams the content deltas of a chat."""
         response = await self._open(self._body(messages, stream=True))
         try:
             done = False
@@ -149,7 +135,6 @@ class OpenAICompatLLM:
         return headers
 
     async def _open(self, body: dict[str, Any]) -> httpx.Response:
-        """Send the request and return an open response with status < 400."""
         if not self.configured:
             raise UnavailableError("llm.base_url is empty", code="llm_not_configured")
         url = f"{self._cfg.base_url.rstrip('/')}/chat/completions"
@@ -190,7 +175,6 @@ class OpenAICompatLLM:
 
 
 def _parse_sse(line: str) -> Any | None:
-    """The JSON payload (or `[DONE]`) of a `data:` line; None for other lines."""
     if not line.startswith(_DATA):
         return None
     data = line[len(_DATA) :].strip()

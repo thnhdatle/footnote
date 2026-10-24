@@ -3,13 +3,10 @@
 .*
 **/__pycache__
 **/*.pyc
-acceptance
-bench
 dist
 docs
 eval
 examples
-mutants
 scripts
 tests
 deploy

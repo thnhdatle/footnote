@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Answer use case: search → evidence gate → generate → verify citations."""
+"""Answer use case: search, check the evidence, generate and verify citations."""
 
 from __future__ import annotations
 
@@ -30,8 +30,6 @@ QUESTION_MAX_CHARS = 4000
 
 @dataclass(frozen=True, slots=True)
 class AnswerRequest:
-    """One question."""
-
     question: str
     filters: SearchFilters = field(default_factory=SearchFilters)
     mode: SearchMode | None = None
@@ -40,16 +38,12 @@ class AnswerRequest:
 
 @dataclass(frozen=True, slots=True)
 class AnswerConfig:
-    """Service-level answer options (config `answer.*`)."""
-
     evidence_threshold_rerank: float | None = None
     evidence_threshold_vector: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class AnswerOutcome:
-    """The answer plus the search and gate that produced it."""
-
     answer: Answer
     search: SearchResult
     gate: GateDecision
@@ -57,8 +51,6 @@ class AnswerOutcome:
 
 @dataclass(frozen=True, slots=True)
 class AnswerEvent:
-    """One SSE event: `retrieval`, `delta`, `citations`, `done` or `error`."""
-
     event: str
     data: dict[str, Any]
 
@@ -79,11 +71,7 @@ class AnswerService:
         *,
         overrides: SearchOverrides | None = None,
     ) -> tuple[SearchResult, GateDecision]:
-        """Search and evaluate the evidence gate without calling the LLM.
-
-        `overrides` is evaluation-only (`footnote eval calibrate` scores other reranker files
-        through this same gate); the API never sets it.
-        """
+        """Searches and evaluates the evidence gate without calling the LLM."""
         question = request.question.strip()
         if not question or len(question) > QUESTION_MAX_CHARS:
             raise ValidationError("question", f"must be 1..{QUESTION_MAX_CHARS} characters")
@@ -134,7 +122,7 @@ class AnswerService:
     async def answer(
         self, tenant: TenantId, collection_id: CollectionId, request: AnswerRequest
     ) -> AnswerOutcome:
-        """Answer one question (non-streamed)."""
+        """Answers one question."""
         self._require_llm()
         result, decision = await self.gate(tenant, collection_id, request)
         if not decision.passed:
@@ -148,7 +136,7 @@ class AnswerService:
     async def stream(
         self, tenant: TenantId, collection_id: CollectionId, request: AnswerRequest
     ) -> AsyncIterator[AnswerEvent]:
-        """Stream `retrieval`, `delta`…, `citations`, `done` (or `error`) events."""
+        """Streams the answer as events."""
         self._require_llm()
         result, decision = await self.gate(tenant, collection_id, request)
         yield AnswerEvent("retrieval", {"hits": result.hits})
@@ -168,7 +156,7 @@ class AnswerService:
                     yield AnswerEvent("delta", {"text": delta.text})
                 if delta.usage is not None:
                     usage = delta.usage
-        except Exception as exc:  # reported to the client as an `error` event
+        except Exception as exc:
             code = getattr(exc, "code", "upstream_failed")
             yield AnswerEvent("error", {"code": code, "message": str(exc)})
             return

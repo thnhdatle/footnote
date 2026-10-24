@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`/v1/collections`: collections and their webhook deliveries."""
+"""Collection routes."""
 
 from __future__ import annotations
 

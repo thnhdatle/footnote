@@ -1,15 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Worker loop: claims jobs across tenants and runs one handler per job kind.
-
-A claimed job runs as its own task next to a lease renewer. When the renewer finds the
-lease lost (reclaimed after expiry) it cancels the handler; the repository's
-`lease_owner` guard already stops a stale worker from overwriting the new owner.
-Failures requeue with jittered backoff until `max_attempts`, then fail for good;
-`PermanentJobError` fails immediately. On stop the loop claims nothing more, waits up to
-`shutdown_timeout` for running jobs and cancels the rest (their leases expire and another
-worker reclaims them). `on_outcome(kind, status)` reports every recorded outcome
-(`succeeded`, `retried`, `failed`) for `footnote_jobs_total`.
-"""
+"""Worker loop that claims jobs across tenants and runs their handlers."""
 
 from __future__ import annotations
 
@@ -31,26 +21,19 @@ _MAX_ERROR_CHARS = 2000
 
 
 class JobStore(Protocol):
-    """What the worker needs from the job repository (`PgJobs` implements it)."""
+    async def claim(self, worker: str, n: int, lease: timedelta) -> list[ClaimedJob]: ...
 
-    async def claim(self, worker: str, n: int, lease: timedelta) -> list[ClaimedJob]:
-        """Claim up to `n` due jobs."""
-
-    async def get(self, tenant: TenantId, job_id: JobId) -> JobRecord:
-        """One job (for its attempt count)."""
+    async def get(self, tenant: TenantId, job_id: JobId) -> JobRecord: ...
 
     async def extend_lease(
         self, tenant: TenantId, job_id: JobId, worker: str, lease: timedelta
-    ) -> bool:
-        """Extend the lease; False when the worker no longer owns the job."""
+    ) -> bool: ...
 
     async def set_progress(
         self, tenant: TenantId, job_id: JobId, worker: str, done: int, total: int
-    ) -> bool:
-        """Record progress."""
+    ) -> bool: ...
 
-    async def complete(self, tenant: TenantId, job_id: JobId, worker: str) -> bool:
-        """Mark done."""
+    async def complete(self, tenant: TenantId, job_id: JobId, worker: str) -> bool: ...
 
     async def fail(
         self,
@@ -59,14 +42,11 @@ class JobStore(Protocol):
         worker: str,
         error: str,
         retry_in: timedelta | None,
-    ) -> bool:
-        """Requeue after `retry_in` or fail for good when None."""
+    ) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
 class WorkerConfig:
-    """`ingest.*` settings of the worker (workers, job_lease, job_max_attempts, poll_interval)."""
-
     worker_id: str
     concurrency: int = 4
     lease: timedelta = timedelta(seconds=60)
@@ -78,20 +58,16 @@ class WorkerConfig:
 
     @property
     def renew_interval(self) -> float:
-        """Seconds between lease extensions (a third of the lease)."""
         return self.lease.total_seconds() / 3
 
 
 @dataclass(frozen=True, slots=True)
 class JobContext:
-    """What a handler receives: the claimed job and a progress reporter."""
-
     job: ClaimedJob
     store: JobStore
     worker: str
 
     async def progress(self, done: int, total: int) -> None:
-        """Record `{done, total}` progress for the job."""
         await self.store.set_progress(self.job.tenant_id, self.job.id, self.worker, done, total)
 
 
@@ -99,8 +75,7 @@ type Handler = Callable[[JobContext], Awaitable[None]]
 type OutcomeObserver = Callable[[str, str], None]
 
 
-def _ignore_outcome(kind: str, status: str) -> None:
-    """Default `on_outcome`: no metrics."""
+def _ignore_outcome(kind: str, status: str) -> None: ...
 
 
 async def _invoke(handler: Handler, ctx: JobContext) -> None:
@@ -108,7 +83,7 @@ async def _invoke(handler: Handler, ctx: JobContext) -> None:
 
 
 class Worker:
-    """Runs `config.concurrency` jobs at a time until `run` is told to stop."""
+    """Runs jobs concurrently until stopped."""
 
     def __init__(  # noqa: PLR0913 - optional rand, log and metrics observer
         self,
@@ -129,7 +104,7 @@ class Worker:
         self._on_outcome = on_outcome
 
     async def run(self, stop: asyncio.Event) -> None:
-        """Claim and process jobs until `stop` is set, then drain (bounded)."""
+        """Claims and processes jobs until stopped, then drains running ones."""
         stop_wait = asyncio.create_task(stop.wait())
         try:
             while not stop.is_set():
@@ -155,7 +130,7 @@ class Worker:
             return ()
         try:
             return await self._store.claim(self._cfg.worker_id, free, self._cfg.lease)
-        except Exception as exc:  # DB blip: log and retry on the next poll
+        except Exception as exc:
             self._log.error("claim failed", component="queue", error=str(exc))
             return ()
 
@@ -204,14 +179,13 @@ class Worker:
             await self._fail(job, "handler was cancelled", permanent=False)
 
     async def _renew(self, job: ClaimedJob) -> None:
-        """Extend the lease until it is lost; returns only on loss."""
         while True:
             await asyncio.sleep(self._cfg.renew_interval)
             try:
                 owned = await self._store.extend_lease(
                     job.tenant_id, job.id, self._cfg.worker_id, self._cfg.lease
                 )
-            except Exception as exc:  # transient DB error: try again before the lease ends
+            except Exception as exc:
                 self._log.warning(
                     "lease renewal failed", component="queue", job_id=str(job.id), error=str(exc)
                 )
@@ -227,7 +201,7 @@ class Worker:
                 self._store.fail(job.tenant_id, job.id, self._cfg.worker_id, error, retry_in),
                 job,
             )
-        except Exception as exc:  # the lease will expire and the job is reclaimed
+        except Exception as exc:
             self._log.error(
                 "recording failure failed", component="queue", job_id=str(job.id), error=str(exc)
             )
@@ -252,10 +226,9 @@ class Worker:
         return timedelta(seconds=seconds)
 
     async def _guarded(self, call: Awaitable[bool], job: ClaimedJob) -> bool:
-        """Run a state update; True when it was recorded (the lease was still ours)."""
         try:
             owned = await call
-        except Exception as exc:  # the lease will expire and the job is reclaimed
+        except Exception as exc:
             self._log.error(
                 "recording job state failed", component="queue", job_id=str(job.id), error=str(exc)
             )

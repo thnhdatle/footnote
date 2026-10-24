@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`eval answers`: item selection, judge parsing and retry, metric arithmetic, outputs."""
 
 from __future__ import annotations
 
@@ -66,8 +65,6 @@ class FakeGenerator:
 
 
 class FakeJudge:
-    """Replies from a script, one reply per call, recording the messages."""
-
     configured = True
 
     def __init__(self, replies: Sequence[str]) -> None:
@@ -146,11 +143,9 @@ async def test_metric_arithmetic_over_answered_items_only() -> None:
         verdicts(("unsupported", {1: False}), ("supported", {})),
     ]
     result, judge, generator = await run(gen, replies)
-    assert len(judge.calls) == 2  # one judge call per answered item
+    assert len(judge.calls) == 2
     assert all(q.startswith(QUESTION_TEMPLATE) for q in generator.questions)
-    # sentences not non-factual: 2 + 2 = 4; supported: 2 (the uncited "supported" is not).
     assert result.faithfulness == pytest.approx(2 / 4)
-    # citations: 3 + 1 = 4 of which 2 support.
     assert result.citation_precision == pytest.approx(2 / 4)
     assert result.answer_rate == pytest.approx(2 / 3)
     assert (result.answered, result.abstained, result.non_factual) == (2, 1, 1)
@@ -183,7 +178,6 @@ async def test_second_invalid_reply_counts_unsupported_and_a_parse_failure(tmp_p
     result, judge, _ = await run(gen, replies, out_dir=tmp_path)
     assert len(judge.calls) == 3
     assert result.judge_parse_failures == 1
-    # q1: 2 unsupported sentences, 2 citations unsupported; q2: 1 supported.
     assert result.faithfulness == pytest.approx(1 / 3)
     assert result.citation_precision == pytest.approx(1 / 3)
     rows = list(csv.DictReader((tmp_path / "answers.csv").open(encoding="utf-8")))

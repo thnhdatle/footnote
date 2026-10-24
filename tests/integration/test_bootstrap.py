@@ -1,18 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The composition root booted in-process against real Postgres (testcontainers).
-
-`run_process` serves the data plane and the admin listener on ephemeral ports with the
-worker in-process, exactly as `footnote serve --with-worker` does; the test then drives
-the HTTP API: admin creates a tenant and key, the tenant uploads a document, the worker
-indexes it, search and answer (plain and streamed) return the chunk with a citation,
-`/readyz` and `/metrics` report the wiring, and the stop event shuts everything down.
-
-Real: Postgres + RLS, every Postgres adapter, the sandboxed parser, the openai_compat
-embedder and LLM clients (HTTP), the queue worker, the manifest-backed tokenizer. Fake:
-the OpenAI-compatible provider is a small in-process HTTP server (bag-of-words embeddings,
-a canned chat answer citing [1]); LM Studio is never called. Also covered: `/readyz`
-503 for a superuser app DSN, and the `migrate`, `tenants`, `keys`, `spaces` commands.
-"""
 
 from __future__ import annotations
 
@@ -64,7 +50,6 @@ WORDS = re.compile(r"[a-z0-9]+")
 
 
 def bow_vector(text: str) -> list[float]:
-    """Bag-of-words hashing vector (non-negative, so related texts have cosine > 0)."""
     vector = [0.0] * DIMS
     for word in WORDS.findall(text.lower()):
         vector[hashlib.sha256(word.encode()).digest()[0] % DIMS] += 1.0
@@ -75,8 +60,6 @@ def bow_vector(text: str) -> list[float]:
 
 @dataclass
 class FakeProvider:
-    """In-process OpenAI-compatible server; records what Footnote sent."""
-
     base_url: str = ""
     embedded: list[str] = field(default_factory=list)
     chats: list[dict[str, Any]] = field(default_factory=list)
@@ -84,7 +67,6 @@ class FakeProvider:
 
 
 def fake_provider_app(state: FakeProvider) -> FastAPI:
-    """`GET /v1/models`, `POST /v1/embeddings`, `POST /v1/chat/completions` (+ SSE)."""
     api = FastAPI()
 
     @api.get("/v1/models")
@@ -134,7 +116,6 @@ def fake_provider_app(state: FakeProvider) -> FastAPI:
 
 @pytest_asyncio.fixture
 async def provider() -> AsyncIterator[FakeProvider]:
-    """The fake provider served by uvicorn on an ephemeral loopback port."""
     import uvicorn  # noqa: PLC0415
 
     state = FakeProvider()
@@ -150,7 +131,6 @@ async def provider() -> AsyncIterator[FakeProvider]:
 
 
 def write_models(root: Path) -> tuple[Path, Path]:
-    """A word-level tokenizer plus a manifest pinning it (id `it-words`)."""
     models_dir = root / "models"
     target = models_dir / "it-words" / "tokenizer.json"
     target.parent.mkdir(parents=True)
@@ -178,7 +158,6 @@ def write_models(root: Path) -> tuple[Path, Path]:
 
 
 def boot_env(pg: PgInfo, provider: FakeProvider, root: Path) -> dict[str, str]:
-    """Environment-only configuration of the booted process."""
     models_dir, manifest = write_models(root)
     space = {
         "name": SPACE,
@@ -211,7 +190,6 @@ def boot_env(pg: PgInfo, provider: FakeProvider, root: Path) -> dict[str, str]:
 
 
 def metric(exposition: str, series: str) -> float:
-    """Value of one exact series in a Prometheus exposition (0 when absent)."""
     for line in exposition.splitlines():
         name, _, value = line.rpartition(" ")
         if name == series:
@@ -221,8 +199,6 @@ def metric(exposition: str, series: str) -> float:
 
 @dataclass
 class Booted:
-    """A running process: its addresses and the stop switch."""
-
     data: str
     admin: str
     stop: asyncio.Event
@@ -230,7 +206,6 @@ class Booted:
 
 
 async def boot(settings: Settings, env: Mapping[str, str]) -> Booted:
-    """Start `run_process` (serve --with-worker) and wait until it listens."""
     loop = asyncio.get_running_loop()
     ready: asyncio.Future[dict[str, str]] = loop.create_future()
     stop = asyncio.Event()
@@ -242,14 +217,13 @@ async def boot(settings: Settings, env: Mapping[str, str]) -> Booted:
     task = asyncio.create_task(run_process(settings, options, stop, env))
     done, _ = await asyncio.wait({ready, task}, timeout=60, return_when=asyncio.FIRST_COMPLETED)
     if task in done:
-        task.result()  # raises the startup failure
+        task.result()
     assert ready in done, "process did not start listening within 60s"
     addresses = ready.result()
     return Booted(f"http://{addresses['data']}", f"http://{addresses['admin']}", stop, task)
 
 
 async def _until(predicate: Any, timeout: float = 60.0) -> Any:
-    """Poll an async predicate until it returns a truthy value."""
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         value = await predicate()
@@ -352,7 +326,6 @@ async def test_serve_with_worker_upload_search_answer(
     finally:
         booted.stop.set()
         await asyncio.wait_for(booted.task, timeout=60)
-    # The worker claims across tenants, so jobs left queued by other tests may run too.
     succeeded = metric(metrics, 'footnote_jobs_total{kind="ingest",status="succeeded"}')
     assert succeeded >= 1
     assert metric(metrics, 'footnote_ingest_jobs_total{status="succeeded"}') == succeeded
@@ -362,7 +335,7 @@ async def test_serve_with_worker_upload_search_answer(
     assert 'footnote_jobs_queue_depth{kind="ingest"}' in metrics
     assert any("Apple trees bloom" in t for t in provider.embedded)
     assert len(provider.chats) == 2
-    assert provider.model_probes >= 2  # llm and embedding readiness, never a completion
+    assert provider.model_probes >= 2
     with pytest.raises(httpx.ConnectError):
         async with httpx.AsyncClient(base_url=booted.data) as client:
             await client.get("/healthz")

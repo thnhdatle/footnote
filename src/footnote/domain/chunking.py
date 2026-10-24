@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Chunking strategies, text normalisation, content hashing and hash diffing."""
+"""Chunking strategies, text normalization and content hashing."""
 
 from __future__ import annotations
 
@@ -20,38 +20,28 @@ _LINE_KINDS = frozenset({ElementKind.TABLE, ElementKind.CODE})
 
 
 class TokenCounter(Protocol):
-    """Counts model tokens of a text, excluding special tokens."""
-
-    def count(self, text: str) -> int:
-        """Return the number of tokens in `text`."""
-        ...
+    def count(self, text: str) -> int: ...
 
 
 def normalise_text(text: str) -> str:
-    """NFC-normalise, collapse every whitespace run to one space and strip."""
     return _WS.sub(" ", unicodedata.normalize("NFC", text)).strip()
 
 
 def embedded_text(title: str, heading_path: Sequence[str], text: str) -> str:
-    """Text that is embedded and hashed: title, heading path and chunk text."""
     return title + "\n" + " > ".join(heading_path) + _SEP + text
 
 
 def content_hash(embedded: str) -> str:
-    """SHA-256 hex of the normalised embedded text (whitespace and NFC/NFD invariant)."""
     return hashlib.sha256(normalise_text(embedded).encode()).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
 class ChunkDiff:
-    """Draft hashes split into those the document already has and those that are new."""
-
     reused: frozenset[str]
     new: frozenset[str]
 
 
 def diff_hashes(existing: Collection[str], drafts: Sequence[ChunkDraft]) -> ChunkDiff:
-    """Partition the distinct draft hashes by presence in `existing`."""
     known = set(existing)
     hashes = {d.content_hash for d in drafts}
     return ChunkDiff(
@@ -62,8 +52,6 @@ def diff_hashes(existing: Collection[str], drafts: Sequence[ChunkDraft]) -> Chun
 
 @dataclass(frozen=True, slots=True)
 class _Piece:
-    """A part of one element that fits the budget (or is an indivisible oversize unit)."""
-
     text: str
     oversize: bool
     path: tuple[str, ...]
@@ -73,8 +61,6 @@ class _Piece:
 
 @dataclass(slots=True)
 class _Work:
-    """A chunk under construction: `overlap` (prefix incl. separator) then `body`."""
-
     overlap: str
     body: str
     oversize: bool
@@ -84,14 +70,11 @@ class _Work:
 
     @property
     def text(self) -> str:
-        """Full chunk text."""
         return self.overlap + self.body
 
 
 @dataclass(frozen=True, slots=True)
 class _Unit:
-    """Atomic unit of the fixed strategy: a word, or a table row / code line."""
-
     text: str
     sep: str
     path: tuple[str, ...]
@@ -108,7 +91,6 @@ def _hi(values: Iterable[int | None]) -> int | None:
 
 
 def _greedy(units: Sequence[str], sep: str, max_tokens: int, counter: TokenCounter) -> list[str]:
-    """Join consecutive units while the joined text stays within the budget."""
     groups: list[str] = []
     current: str | None = None
     for unit in units:
@@ -124,7 +106,6 @@ def _greedy(units: Sequence[str], sep: str, max_tokens: int, counter: TokenCount
 
 
 def _split_prose(text: str, max_tokens: int, counter: TokenCounter) -> list[str]:
-    """Split by sentences, then by words for a sentence that alone exceeds the budget."""
     sentences = [s for s in _SENTENCE_END.split(text) if s]
     parts: list[str] = []
     for group in _greedy(sentences, " ", max_tokens, counter):
@@ -157,7 +138,6 @@ def _pieces(element: Element, max_tokens: int, counter: TokenCounter) -> list[_P
 
 
 def _tail_words(text: str, overlap_tokens: int, counter: TokenCounter) -> list[str]:
-    """Longest run of whole trailing words within `overlap_tokens` tokens."""
     words = text.split()
     taken = 0
     while taken < len(words) and (
@@ -170,7 +150,6 @@ def _tail_words(text: str, overlap_tokens: int, counter: TokenCounter) -> list[s
 def _overlap_prefix(
     previous: str, piece: _Piece, settings: ChunkingSettings, counter: TokenCounter
 ) -> str:
-    """Overlap prefix (with separator) for a chunk starting with `piece`, shrunk to fit."""
     if piece.oversize:
         return ""
     words = _tail_words(previous, settings.overlap_tokens, counter)
@@ -182,7 +161,6 @@ def _overlap_prefix(
 def _pack(
     pieces: Sequence[_Piece], settings: ChunkingSettings, counter: TokenCounter
 ) -> list[_Work]:
-    """Greedily pack pieces in order; chunks after the first get an overlap prefix."""
     out: list[_Work] = []
     current: _Work | None = None
     for piece in pieces:
@@ -208,7 +186,6 @@ def _pack(
 def _try_merge(
     first: _Work, second: _Work, settings: ChunkingSettings, counter: TokenCounter
 ) -> _Work | None:
-    """Merge two chunks (keeping the first's overlap if it fits), or None if too big."""
     for overlap in (first.overlap, ""):
         merged = _Work(
             overlap,
@@ -226,7 +203,6 @@ def _try_merge(
 def _merge_small(
     chunks: list[_Work], settings: ChunkingSettings, counter: TokenCounter
 ) -> list[_Work]:
-    """Merge chunks below `min_tokens` with the next, else the previous, neighbour."""
     i = 0
     while i < len(chunks):
         if counter.count(chunks[i].text) >= settings.min_tokens:
@@ -246,7 +222,6 @@ def _merge_small(
 
 
 def _sections(elements: Sequence[Element]) -> list[list[Element]]:
-    """Group consecutive body elements by heading path; a heading starts a new section."""
     sections: list[list[Element]] = []
     open_section: list[Element] | None = None
     for element in elements:
@@ -283,7 +258,6 @@ def _window_text(units: Sequence[_Unit], start: int, end: int) -> str:
 def _next_start(
     units: Sequence[_Unit], start: int, end: int, settings: ChunkingSettings, counter: TokenCounter
 ) -> int:
-    """Start of the following window: overlap of at most `overlap_tokens`, always advancing."""
     nxt = end
     while (
         nxt - 1 > start
@@ -298,7 +272,6 @@ def _next_start(
 def _fixed(
     units: Sequence[_Unit], settings: ChunkingSettings, counter: TokenCounter
 ) -> list[_Work]:
-    """Windows of `max_tokens` over the unit stream, overlapping by `overlap_tokens`."""
     out: list[_Work] = []
     start = 0
     previous_end = 0
@@ -338,7 +311,7 @@ def chunk_elements(
     settings: ChunkingSettings,
     counter: TokenCounter,
 ) -> list[ChunkDraft]:
-    """Chunk parsed elements with the configured strategy into ordered drafts."""
+    """Chunks parsed elements into ordered drafts."""
     body = [e for e in elements if e.kind is not ElementKind.HEADING]
     limit = settings.max_tokens
     works: list[_Work] = []

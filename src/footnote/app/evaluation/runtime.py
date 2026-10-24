@@ -1,15 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The evaluation runtime: Footnote's composition root in-process, plus eval-only wiring.
-
-`open_eval_runtime` opens `bootstrap.open_runtime` with the embedding cache injected
-through the embedder-factory seam (`embedder_wrapper`): every space's embedder is wrapped
-in a `CachingEmbedder` keyed by its model file SHA-256 (or provider/model/dimensions).
-Documents are cached; queries are not (`cache_queries=False`), so the measured search
-latency includes query embedding. It also builds both reranker files (`int8`, `fp32`;
-the configured one is the runtime's own instance) and exposes the app services as
-`EvalServices`. Later eval commands (`abstention`, `calibrate`, `answers`) reuse it:
-`rt.runtime` is the full `bootstrap.Runtime` (e.g. `rt.runtime.api.answers`).
-"""
+"""In-process runtime for evaluation runs."""
 
 from __future__ import annotations
 
@@ -34,8 +24,6 @@ DATASETS_MANIFEST = Path("eval/datasets.yaml")
 
 @dataclass
 class EvalRuntime:
-    """The open runtime, the harness services and the caches built so far (by space)."""
-
     settings: Settings
     runtime: bootstrap.Runtime
     services: EvalServices
@@ -44,7 +32,6 @@ class EvalRuntime:
     provenance: list[str] = field(default_factory=list)
 
     def mark_warm(self, dataset: str, texts: int) -> bool:
-        """Record `dataset` as fully embedded in the default space's cache."""
         cache = self.caches.get(self.settings.embedding.default_space)
         if cache is None:
             return False
@@ -53,7 +40,6 @@ class EvalRuntime:
 
 
 def dataset_sha256(name: str, manifest: Path = DATASETS_MANIFEST) -> str | None:
-    """Pinned archive SHA-256 of `name` in `eval/datasets.yaml` (None when unknown)."""
     try:
         data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
     except OSError:
@@ -67,7 +53,7 @@ def dataset_sha256(name: str, manifest: Path = DATASETS_MANIFEST) -> str | None:
 async def open_eval_runtime(
     settings: Settings, *, cache: bool = True
 ) -> AsyncIterator[EvalRuntime]:
-    """Open the in-process runtime for evaluation (cache on unless `cache=False`)."""
+    """Opens the in-process runtime with the embedding cache."""
     manifest = bootstrap.load_model_manifest(settings)
     caches: dict[str, CachingEmbedder] = {}
 

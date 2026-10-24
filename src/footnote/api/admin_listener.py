@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Admin listener (`admin.listen`, default `127.0.0.1:9094`): `/healthz`, `/readyz`
-(every readiness check of `ApiDeps`) and `/metrics` (Prometheus).
-
-Bound to loopback by default and kept free of tenant data, so it carries no
-authentication (Prometheus scrapes and `footnote healthcheck` call it); the admin API
-itself lives on the data plane under `/v1/admin` and requires the admin key.
-"""
+"""Admin listener app."""
 
 from __future__ import annotations
 
@@ -18,7 +12,7 @@ from footnote.api.middleware import RequestContextMiddleware
 
 
 def create_admin_app(deps: ApiDeps) -> FastAPI:
-    """Operations app for the admin listener (no OpenAPI, no tenant routes)."""
+    """Creates the app served on the admin listener."""
     app = FastAPI(
         title="Footnote admin listener",
         docs_url=None,

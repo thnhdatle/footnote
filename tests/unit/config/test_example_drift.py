@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""deploy/config.example.yaml and docs/guides/configuration.md must match the config model."""
 
 from __future__ import annotations
 
@@ -58,7 +57,6 @@ def test_example_has_no_secret_values() -> None:
 
 
 def test_every_example_key_is_an_option() -> None:
-    # extra="forbid" rejects unknown keys; this also covers nested section keys.
     leaves = {path for path, _ in config_leaves()}
     sections = {path[:i] for path in leaves for i in range(1, len(path))}
 

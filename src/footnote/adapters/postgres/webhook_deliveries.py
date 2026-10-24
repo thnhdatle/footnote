@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Webhook delivery log: one row per delivery, updated by every attempt.
-
-The delivery id is the id of the `webhook` job that carries it, so retries of one job
-update one row and `attempts` counts them.
-"""
+"""Webhook delivery log."""
 
 from __future__ import annotations
 
@@ -43,13 +39,12 @@ def _record(row: dict[str, Any]) -> DeliveryRecord:
 
 
 class PgWebhookDeliveries:
-    """Delivery log repository over the app pool."""
+    """Stores webhook delivery attempts."""
 
     def __init__(self, db: Database) -> None:
         self._db = db
 
     async def attempts(self, tenant: TenantId, delivery_id: UUID) -> int:
-        """Attempts recorded so far for a delivery (0 when it has no row yet)."""
         query = sql.SQL(
             "SELECT d.attempts FROM footnote.webhook_deliveries d WHERE {} AND d.id = %(id)s"
         ).format(self._db.tenant_filter("d"))
@@ -58,7 +53,7 @@ class PgWebhookDeliveries:
         return int(row["attempts"]) if row else 0
 
     async def record_attempt(self, tenant: TenantId, attempt: AttemptRecord) -> None:
-        """Insert the delivery on its first attempt, else bump `attempts` and the outcome."""
+        """Records one delivery attempt."""
         error = attempt.error[:_MAX_ERROR_CHARS] if attempt.error is not None else None
         async with self._db.tenant_tx(tenant) as conn:
             await conn.execute(
@@ -85,7 +80,6 @@ class PgWebhookDeliveries:
     async def list_for_collection(
         self, tenant: TenantId, collection_id: CollectionId, limit: int = 50
     ) -> list[DeliveryRecord]:
-        """Newest deliveries of a collection first."""
         query = sql.SQL(
             "SELECT {} FROM footnote.webhook_deliveries d WHERE {} AND d.collection_id = %(cid)s "
             "ORDER BY d.created_at DESC, d.id DESC LIMIT %(limit)s"

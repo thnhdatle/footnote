@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the answer use case: gate, generation, citations and streaming."""
 
 from __future__ import annotations
 
@@ -42,7 +41,6 @@ from .fakes import (
 TENANT = TenantId(UUID(int=7))
 COLLECTION = CollectionId(UUID(int=99))
 QUESTION = "beta gamma"
-# Rerank logit = 2 - 1 = 1, so the rerank gate score is sigmoid(1) ~ 0.731.
 LOW, HIGH = 0.5, 0.9
 
 
@@ -183,7 +181,6 @@ async def test_answer_vector_gate_resolution_order(
         space_threshold=space,
         calibrated=0.0,
     )
-    # The question equals a chunk text, so the best cosine similarity is 1.
     rig.collection.add(QUESTION)
     outcome = await rig.answer(mode=SearchMode.HYBRID)
     assert outcome.gate.kind is GateKind.VECTOR
@@ -297,7 +294,7 @@ async def test_answer_gate_scores_with_an_override_reranker_file() -> None:
     assert rig.reranker is not None
     assert rig.reranker.calls == []
     assert decision.kind is GateKind.RERANK
-    assert decision.threshold == LOW  # the override file's calibrated value
+    assert decision.threshold == LOW
     assert decision.passed
     assert rig.llm.chat_calls == []
 

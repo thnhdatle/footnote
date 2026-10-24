@@ -7,13 +7,12 @@ UV := uv run --frozen
 UV_TEST := uv run --frozen --all-extras
 FUZZTIME ?= 30
 IMAGE ?= thnhdatle/footnote:dev
-# Release version shown in the acceptance report and the benchmark results.
-RELEASE ?= v0.1.0
+JUDGE_MODEL ?= gemma-4-26b-a4b-it-qat-mlx
 COMPOSE := docker compose -f deploy/docker-compose.yml -p footnote
 export RAYLD_FOOTNOTE_IMAGE ?= $(IMAGE)
 
-.PHONY: bootstrap generate fmt lint test test-integration coverage mutation acceptance bench fuzz \
-	examples quickstart-test security build docker up down ci release-check release-dry eval-quick eval-data
+.PHONY: bootstrap generate fmt lint test test-integration coverage fuzz \
+	examples quickstart-test security build docker up down ci release-check release-dry eval eval-data
 
 bootstrap:
 	@$(STEP) bootstrap scripts/bootstrap.sh
@@ -33,24 +32,14 @@ lint:
 
 test:
 	@$(STEP) test bash -c '$(UV_TEST) pytest tests/unit -n auto -q -p no:cacheprovider \
-		-m "not integration and not acceptance"'
+		-m "not integration"'
 
 test-integration:
 	@$(STEP) test-integration bash -c '$(UV_TEST) pytest tests/integration -m integration -q -p no:cacheprovider'
 
 coverage:
 	@$(STEP) coverage bash -c 'rm -f .coverage .coverage.*; $(UV_TEST) coverage run --parallel-mode -m pytest tests/unit tests/integration \
-		-q -p no:cacheprovider -m "not acceptance" && $(UV) coverage combine -q && scripts/coverage_check.sh'
-
-mutation:
-	@$(STEP) mutation scripts/mutation.sh
-
-acceptance:
-	@$(UV) python acceptance/runner.py --version $(RELEASE) $(if $(ONLY),--only $(ONLY),)
-
-bench:
-	@$(STEP) bench bash -c 'FOOTNOTE_KEEP_STACK=1 RELEASE=$(RELEASE) $(UV) python acceptance/runner.py --bench --version $(RELEASE) \
-		&& RELEASE=$(RELEASE) $(UV) python -m bench.latency.run && RELEASE=$(RELEASE) $(UV) python -m bench.results'
+		-q -p no:cacheprovider && $(UV) coverage combine -q && scripts/coverage_check.sh'
 
 fuzz:
 	@$(STEP) fuzz bash -c 'HYPOTHESIS_PROFILE=fuzz FUZZTIME=$(FUZZTIME) $(UV) pytest tests/unit -m "not integration" -q -k fuzz'
@@ -85,8 +74,10 @@ release-check:
 release-dry:
 	@$(STEP) release-dry scripts/release_dry.sh
 
-eval-quick:
-	@$(STEP) eval-quick $(UV) footnote eval retrieval --dataset scifact --quick
+eval:
+	@$(STEP) eval bash -c '$(UV) footnote eval retrieval --dataset scifact --quick \
+		&& $(UV) footnote eval abstention --dataset scifact \
+		&& $(UV) footnote eval answers --dataset scifact --limit 10 --judge-model $(JUDGE_MODEL)'
 
 eval-data:
 	@$(STEP) eval-data scripts/fetch_eval_data.sh

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Evaluation CLI group: `eval retrieval|abstention|calibrate|answers|cache status`."""
+"""Evaluation commands: dataset checks, retrieval ablation, abstention, calibration and answers."""
 
 from __future__ import annotations
 
@@ -67,7 +67,6 @@ QUICK_QUERIES = 50
 
 
 def short_commit(cwd: Path | None = None) -> str:
-    """`git rev-parse --short HEAD`, else `FOOTNOTE_BUILD_COMMIT`, else `unknown`."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607 - git from PATH
@@ -85,7 +84,6 @@ def short_commit(cwd: Path | None = None) -> str:
 
 
 def new_run_id(commit: str, now: datetime | None = None) -> str:
-    """`<UTC timestamp>-<short commit>`, e.g. `20261020T084100Z-1a2b3c4`."""
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     return f"{stamp}-{commit}"
 
@@ -95,7 +93,6 @@ def _log(message: str) -> None:
 
 
 def summary_lines(rows: list[Row]) -> list[str]:
-    """One line per row: name, split, nDCG@10, R@10, p95."""
     lines = []
     for r in rows:
         mark = " *" if r.shipped else ""
@@ -200,17 +197,13 @@ def retrieval(  # noqa: PLR0913, PLR0917 - one parameter per CLI option
     chunking: Annotated[
         str | None, typer.Option(help="Comma-separated strategies (default: shipped).")
     ] = None,
-    ablation: Annotated[
-        bool, typer.Option(help="Run the ablation row set (eval/ablation.md).")
-    ] = False,
+    ablation: Annotated[bool, typer.Option(help="Run the full ablation row set.")] = False,
     split: Annotated[str, typer.Option(help="qrels split: test or train.")] = "test",
     keep: Annotated[bool, typer.Option(help="Keep the temporary tenant.")] = False,
     cache: Annotated[bool, typer.Option(help="Use the embedding cache.")] = True,
     concurrency: Annotated[int, typer.Option(min=1, max=64, help="Documents in flight.")] = 8,
     limit: Annotated[int | None, typer.Option(min=1, help="First N queries per split.")] = None,
-    quick: Annotated[
-        bool, typer.Option(help=f"First {QUICK_QUERIES} queries per split (make eval-quick).")
-    ] = False,
+    quick: Annotated[bool, typer.Option(help=f"First {QUICK_QUERIES} queries per split.")] = False,
     output_dir: Annotated[Path, typer.Option(help="Results root.")] = DEFAULT_RESULTS,
 ) -> None:
     """Index a dataset into a temporary tenant, run every query per configuration and
@@ -252,18 +245,12 @@ def retrieval(  # noqa: PLR0913, PLR0917 - one parameter per CLI option
     typer.echo(f"wrote {directory / 'retrieval.csv'} and {directory / 'ablation.md'}")
 
 
-# --- eval abstention / eval calibrate ---------------------------------------------------
-
 RERANKER_FILES = ("all", "configured")
 
 
 def _rerank_specs(
     settings: Settings, rt: EvalRuntime, which: str
 ) -> tuple[list[GateSpec], dict[str, float | None]]:
-    """Rerank gates per reranker file (configured first) and each file's manifest value.
-
-    `which` = `configured` scores the active file only; `all` adds every other variant file
-    of the model present in `models.dir` (absent files are reported and skipped)."""
     from footnote.adapters.models import local_path, reranker_variant_key  # noqa: PLC0415
     from footnote.app.evaluation.abstention import GateSpec  # noqa: PLC0415
     from footnote.app.evaluation.retrieval import EvalError  # noqa: PLC0415
@@ -547,7 +534,6 @@ async def _run_calibrate(  # noqa: PLR0913 - one value per command option
 async def _apply_calibration(
     settings: Settings, rt: EvalRuntime, results: list[Calibration]
 ) -> list[str]:
-    """Write the manifest values (reranker files, the space's model) and the space row."""
     from dataclasses import replace  # noqa: PLC0415
 
     from footnote.app.evaluation.manifest_edit import (  # noqa: PLC0415
@@ -573,7 +559,7 @@ async def _apply_calibration(
         text = set_model_threshold(text, space.model, vector.stored)
         lines.append(f"manifest {path}: embedder {space.model} = {vector.stored:.4f}")
     path.write_text(text, encoding="utf-8")
-    manifest = load_model_manifest(settings)  # the edited file must still load
+    manifest = load_model_manifest(settings)
     for r in results:
         if r.spec.kind.value == "rerank":
             file = manifest.get(settings.rerank.model).variants[r.spec.key]
@@ -706,7 +692,7 @@ async def _run_answers(  # noqa: PLR0913 - one value per command option
         )
 
 
-JUDGE_MAX_TOKENS = 2048  # one JSON entry per sentence; 512 can cut it
+JUDGE_MAX_TOKENS = 2048
 
 
 @eval_app.command("answers")

@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Document parsers (pdf, docx, html, md, txt) producing domain `Element`s.
-
-`SandboxedParser` implements `domain.ports.Parser`; `parse_bytes` is the in-process
-dispatch used inside the sandbox child and by tests::
-
-    parser = SandboxedParser(ParseLimits(max_pages=500))
-    elements = await parser.parse(sniff(data, "report.pdf"), data)
-"""
+"""Document parsers that turn uploads into domain elements."""
 
 from footnote.adapters.parsers.errors import ParseError
 from footnote.adapters.parsers.inspect import UploadChecks

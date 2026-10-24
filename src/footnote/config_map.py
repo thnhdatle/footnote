@@ -1,8 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Trivial mappings from `Settings` to the config objects the adapters take.
-
-Only the bootstrap and CLI import this module (it depends on adapters).
-"""
+"""Maps the settings to the configuration objects of the adapters."""
 
 from __future__ import annotations
 
@@ -18,7 +15,6 @@ from footnote.config import ConfigError, Settings, env_name
 
 
 def llm_config(settings: Settings) -> LLMConfig:
-    """`llm.*` for the chat client."""
     c = settings.llm
     return LLMConfig(
         base_url=c.base_url,
@@ -34,7 +30,6 @@ def llm_config(settings: Settings) -> LLMConfig:
 
 
 def embedding_defaults(settings: Settings) -> OpenAICompatDefaults:
-    """`embedding.*` connection settings shared by every openai_compat space."""
     c = settings.embedding
     return OpenAICompatDefaults(
         base_url=c.base_url,
@@ -48,7 +43,6 @@ def embedding_defaults(settings: Settings) -> OpenAICompatDefaults:
 
 
 def worker_config(settings: Settings, worker_id: str) -> WorkerConfig:
-    """`ingest.*` for the queue worker."""
     c = settings.ingest
     return WorkerConfig(
         worker_id=worker_id,
@@ -61,7 +55,6 @@ def worker_config(settings: Settings, worker_id: str) -> WorkerConfig:
 
 
 def webhook_config(settings: Settings) -> WebhookConfig:
-    """`webhooks.*` for the sender."""
     c = settings.webhooks
     return WebhookConfig(
         allow_http=c.allow_http,
@@ -72,7 +65,6 @@ def webhook_config(settings: Settings) -> WebhookConfig:
 
 
 def snapshot_settings(settings: Settings) -> SnapshotSettings:
-    """`retrieval.*` scan options for search transactions."""
     r = settings.retrieval
     return SnapshotSettings(
         ef_search=r.ef_search,
@@ -82,7 +74,6 @@ def snapshot_settings(settings: Settings) -> SnapshotSettings:
 
 
 def app_pool_settings(settings: Settings) -> PoolSettings:
-    """`database.*` for the `footnote_app` pool; ConfigError when no URL is configured."""
     c = settings.database
     url = c.url.get_secret_value()
     if not url:
@@ -97,7 +88,6 @@ def app_pool_settings(settings: Settings) -> PoolSettings:
 
 
 def admin_pool_settings(settings: Settings) -> PoolSettings:
-    """`admin_database.*` for the `footnote_admin` pool; ConfigError when no URL is configured."""
     c = settings.admin_database
     url = c.url.get_secret_value()
     if not url:

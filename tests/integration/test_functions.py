@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""SECURITY DEFINER functions: key resolution, space registration, job claiming."""
 
 from __future__ import annotations
 
@@ -56,7 +55,7 @@ async def test_resolve_key_valid_and_last_used_throttled(
     first = await _last_used(pg, issued.record.id)
     assert first is not None
     await resolver.resolve(issued.key)
-    assert await _last_used(pg, issued.record.id) == first  # at most once per minute
+    assert await _last_used(pg, issued.record.id) == first
 
     async with await psycopg.AsyncConnection.connect(pg.admin, autocommit=True) as conn:
         await conn.execute(
@@ -236,7 +235,6 @@ async def test_claim_jobs_across_tenants_skip_locked_and_lease_expiry(
     record = await jobs.get(t1, j1)
     assert (record.status, record.attempts) == ("running", 1)
 
-    # Expired lease: reclaimable by another worker; the old owner can no longer write.
     async with await psycopg.AsyncConnection.connect(pg.admin, autocommit=True) as conn:
         await conn.execute(
             "UPDATE footnote.jobs SET lease_until = now() - interval '1 second' WHERE id = %s",

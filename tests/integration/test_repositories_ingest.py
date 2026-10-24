@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Repository methods behind ingest, reindex and quotas: guards, reversion, tenant scoping."""
 
 from __future__ import annotations
 
@@ -38,27 +37,21 @@ def _name(prefix: str) -> str:
 
 @pytest_asyncio.fixture
 async def a(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant A with one indexed document (2 chunks)."""
     yield await seed(admin_db, app_db, _name("a"), ["apple pie recipe", "banana bread recipe"])
 
 
 @pytest_asyncio.fixture
 async def b(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant B (the intruder, 1 chunk)."""
     yield await seed(admin_db, app_db, _name("b"), ["cherry tart"])
 
 
 @pytest.fixture(params=[True, False], ids=["predicates", "rls-only"])
 def b_db(request: pytest.FixtureRequest, app_pool: Pool) -> Database:
-    """The intruder's database, with or without app-side tenant predicates."""
     return Database(app_pool, app_tenant_predicates=bool(request.param))
 
 
 async def _external_id(docs: PgDocuments, a: World) -> str:
     return (await docs.get(a.tenant, a.collection.id, a.document_id)).external_id
-
-
-# --- spaces, collections ----------------------------------------------------------------
 
 
 async def test_space_get_by_id(app_db: Database, a: World) -> None:
@@ -84,15 +77,11 @@ async def test_collection_webhook_events_round_trip(app_db: Database, a: World) 
     made = await repo.create(a.tenant, NewCollection(_name("hooks"), settings, a.space.id))
     assert made.settings.webhook.events == (WebhookEvent.DOCUMENT_FAILED,)
     assert (await repo.get(a.tenant, made.id)).settings.webhook == settings.webhook
-    # Settings stored before the webhook block existed read back as "all events".
     assert (await repo.get(a.tenant, a.collection.id)).settings.webhook == WebhookSettings()
     updated, _ = await repo.update(
         a.tenant, made.id, CollectionSettings(embedding_space=a.space.name)
     )
     assert updated.settings.webhook == WebhookSettings()
-
-
-# --- index ------------------------------------------------------------------------------
 
 
 async def test_current_chunk_count_and_on_current_jobs(app_db: Database, a: World) -> None:
@@ -127,7 +116,6 @@ async def test_current_chunk_count_and_on_current_jobs(app_db: Database, a: Worl
     assert [(await jobs.get(a.tenant, j)).args["x"] for j in late.job_ids] == ["always"]
     assert await index.current_chunk_count(a.tenant, a.document_id) == 1
 
-    # A version that becomes current also gets its on_current jobs.
     again = await docs.upload(a.tenant, upload_of(a.collection, b"third", external_id=ext))
     assert again.version_id is not None
     won = await index.swap(
@@ -140,9 +128,6 @@ async def test_current_chunk_count_and_on_current_jobs(app_db: Database, a: Worl
     )
     assert won.current
     assert [(await jobs.get(a.tenant, j)).args["x"] for j in won.job_ids] == ["always", "current"]
-
-
-# --- documents: status guards -----------------------------------------------------------
 
 
 async def test_set_status_guard(app_db: Database, a: World) -> None:
@@ -161,7 +146,6 @@ async def test_set_status_guard(app_db: Database, a: World) -> None:
         a.tenant, a.document_id, DocumentStatus.PARSING, version_id=newer.version_id
     )
     assert await status() is DocumentStatus.PARSING
-    # Without a version the update is unconditional and a missing document is an error.
     await docs.set_status(a.tenant, a.document_id, DocumentStatus.EMBEDDING)
     assert await status() is DocumentStatus.EMBEDDING
     with pytest.raises(NotFoundError):
@@ -187,9 +171,6 @@ async def test_fail_version_guard(app_db: Database, a: World) -> None:
     await docs.fail_version(a.tenant, newer.version_id, error)
     doc = await docs.get(a.tenant, a.collection.id, a.document_id)
     assert (doc.status, doc.error) == (DocumentStatus.FAILED, error)
-
-
-# --- documents: reversion ---------------------------------------------------------------
 
 
 async def test_reversion(app_db: Database, a: World) -> None:
@@ -224,10 +205,8 @@ async def test_reversion(app_db: Database, a: World) -> None:
     doc = await docs.get(a.tenant, a.collection.id, a.document_id)
     assert doc.status is DocumentStatus.QUEUED
     assert doc.current_version_id == a.version_id
-    # An upload (here: our own reversion) in flight wins, whatever the hash.
     assert await docs.reversion(a.tenant, a.document_id, "other-hash") is None
     assert await docs.reversion(a.tenant, a.document_id, "third-hash") is None
-    # A failed latest version does not block a new one.
     await docs.fail_version(a.tenant, result.version_id, {"code": "x", "message": "y"})
     retry = await docs.reversion(a.tenant, a.document_id, "other-hash")
     assert retry is not None
@@ -259,9 +238,6 @@ async def test_reversion_copies_nothing_when_original_was_removed(
     assert not (await docs.version(a.tenant, result.version_id)).has_original
 
 
-# --- cross-tenant -----------------------------------------------------------------------
-
-
 async def test_ingest_methods_cross_tenant(
     b_db: Database, app_db: Database, a: World, b: World
 ) -> None:
@@ -282,7 +258,6 @@ async def test_ingest_methods_cross_tenant(
     ):
         with pytest.raises(NotFoundError):
             await call
-    # The guarded form matches nothing for another tenant and changes nothing.
     await docs.set_status(b.tenant, a.document_id, DocumentStatus.FAILED, version_id=a.version_id)
     own = PgDocuments(app_db)
     doc = await own.get(a.tenant, a.collection.id, a.document_id)

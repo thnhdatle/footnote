@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Chunks, memberships and vectors: incremental indexing, version swap, re-embed, GC.
-
-New chunk and vector rows are invisible to queries until
-the swap inserts the memberships of a version that becomes current; GC runs as a
-separate job after `ingest.gc_grace`, never inside a swap.
-"""
+"""Chunks, memberships and vectors of the search index."""
 
 from __future__ import annotations
 
@@ -41,7 +36,6 @@ from footnote.domain.errors import ConflictError, ValidationError
 from footnote.domain.jobs import NewJob
 from footnote.domain.tenancy import TenantId
 
-# Chunk `c` (joined to its document `d`) is a member of the document's current version.
 CURRENT_MEMBER = sql.SQL(
     "EXISTS (SELECT 1 FROM footnote.version_chunks vc WHERE vc.tenant_id = d.tenant_id "
     "AND vc.version_id = d.current_version_id AND vc.chunk_id = c.id)"
@@ -49,7 +43,7 @@ CURRENT_MEMBER = sql.SQL(
 
 
 class PgIndex:
-    """Write side of retrieval; every method runs under the tenant's RLS setting."""
+    """Writes chunks, memberships and vectors."""
 
     def __init__(self, db: Database, id_factory: IdFactory = new_id) -> None:
         self._db = db
@@ -61,7 +55,6 @@ class PgIndex:
     async def existing_chunks(
         self, tenant: TenantId, document_id: DocumentId, hashes: Sequence[str]
     ) -> dict[str, ChunkId]:
-        """Chunk ids of the document already stored for these content hashes (diff)."""
         query = sql.SQL(
             "SELECT c.content_hash, c.id FROM footnote.chunks c "
             "WHERE {} AND c.document_id = %(doc)s AND c.content_hash = ANY(%(hashes)s)"
@@ -73,7 +66,7 @@ class PgIndex:
         return {r["content_hash"]: ChunkId(r["id"]) for r in rows}
 
     async def insert_chunks(self, tenant: TenantId, batch: ChunkBatch) -> dict[str, ChunkId]:
-        """Insert chunks (one per distinct hash, existing ones kept); returns hash -> id."""
+        """Inserts chunks and keeps the existing ones."""
         unique = list({d.content_hash: d for d in batch.drafts}.values())
         rows = [
             {
@@ -121,7 +114,6 @@ class PgIndex:
         space: EmbeddingSpace,
         vectors: Sequence[tuple[ChunkId, Sequence[float]]],
     ) -> None:
-        """Store L2-normalised vectors of `space` (existing rows kept; pipelined inserts)."""
         rows = []
         for chunk_id, vector in vectors:
             if len(vector) != space.dimensions:
@@ -152,7 +144,6 @@ class PgIndex:
     async def missing_vectors(
         self, tenant: TenantId, collection_id: CollectionId, chunk_ids: Sequence[ChunkId]
     ) -> dict[int, list[ChunkId]]:
-        """Per needed space (active, and target while re-embedding): chunks lacking a vector."""
         async with self._db.tenant_tx(tenant) as conn:
             return await self._missing(conn, tenant, collection_id, chunk_ids)
 
@@ -183,7 +174,6 @@ class PgIndex:
         return out
 
     async def current_chunk_count(self, tenant: TenantId, document_id: DocumentId) -> int:
-        """Distinct chunks of the document's current version (0 without one)."""
         query = sql.SQL(
             "SELECT count(DISTINCT vc.chunk_id) AS n FROM footnote.documents d "
             "JOIN footnote.version_chunks vc ON vc.tenant_id = d.tenant_id "
@@ -203,14 +193,7 @@ class PgIndex:
         jobs: Sequence[NewJob] = (),
         on_current: Sequence[NewJob] = (),
     ) -> SwapResult:
-        """Version swap: memberships + current version + chunk_count + jobs, one tx.
-
-        `jobs` are always inserted; `on_current` jobs only when the version became current.
-
-        Locks the document FOR UPDATE, then the collection FOR NO KEY UPDATE
-        (FOR SHARE would deadlock two concurrent swaps updating `chunk_count`).
-        ConflictError `vectors_missing` when a needed space lacks a vector.
-        """
+        """Makes a new version the current one."""
         params = {"tenant": tenant, "doc": document_id, "ver": version_id}
         async with self._db.tenant_tx(tenant) as conn:
             doc = require(
@@ -328,11 +311,7 @@ class PgIndex:
     async def gc_document(
         self, tenant: TenantId, document_id: DocumentId, *, delete_superseded_originals: bool
     ) -> GcStats:
-        """Remove superseded/failed memberships, unreferenced chunks (and their vectors).
-
-        Chunks are kept while a version of the document is still `processing`, because
-        an in-flight ingest has inserted chunks that no membership references yet.
-        """
+        """Removes superseded memberships and unreferenced chunks of a document."""
         params = {"tenant": tenant, "doc": document_id, "blobs": delete_superseded_originals}
         async with self._db.tenant_tx(tenant) as conn:
             locked = await fetch_one(
@@ -373,7 +352,6 @@ class PgIndex:
         return GcStats(memberships, chunks, blobs)
 
     async def gc_space(self, tenant: TenantId, collection_id: CollectionId, space_id: int) -> int:
-        """Delete a collection's vectors of a space that is neither active nor target."""
         query = sql.SQL(
             "DELETE FROM footnote.chunk_vectors v USING footnote.collections col "
             "WHERE {} AND col.id = %(cid)s AND v.tenant_id = col.tenant_id "
@@ -389,7 +367,6 @@ class PgIndex:
     async def reembed_batch(
         self, tenant: TenantId, collection_id: CollectionId, space_id: int, limit: int
     ) -> list[tuple[ChunkId, str]]:
-        """Current-version chunks lacking a vector of `space_id` (id, embedded text)."""
         query = sql.SQL(
             "SELECT c.id, c.embedded_text FROM footnote.chunks c "
             "JOIN footnote.documents d ON d.tenant_id = c.tenant_id AND d.id = c.document_id "
@@ -406,7 +383,6 @@ class PgIndex:
     async def reembed_counts(
         self, tenant: TenantId, collection_id: CollectionId, space_id: int
     ) -> tuple[int, int]:
-        """(current-version chunks with a `space_id` vector, all current-version chunks)."""
         query = sql.SQL(
             "SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM footnote.chunk_vectors v "
             "WHERE v.tenant_id = c.tenant_id AND v.chunk_id = c.id AND v.space_id = %(space)s)) "
@@ -424,10 +400,6 @@ class PgIndex:
     async def switch_space(
         self, tenant: TenantId, collection_id: CollectionId, jobs: Sequence[NewJob] = ()
     ) -> bool:
-        """Re-embed switch: active := target when every current-version chunk has a target vector.
-
-        Returns False (nothing changed) while backfilling is incomplete or no target is set.
-        """
         params = {"tenant": tenant, "cid": collection_id}
         async with self._db.tenant_tx(tenant) as conn:
             col = await fetch_one(

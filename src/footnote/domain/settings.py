@@ -75,8 +75,6 @@ def _check_threshold(field_name: str, value: float | None) -> None:
 
 @dataclass(frozen=True, slots=True)
 class ChunkingSettings:
-    """Chunking strategy and token budget."""
-
     strategy: ChunkingStrategyName = ChunkingStrategyName.HEADING
     max_tokens: int = 400
     overlap_tokens: int = 40
@@ -84,7 +82,6 @@ class ChunkingSettings:
     tokenizer: str = "bge-small-en-v1.5"
 
     def validate(self, tokenizer_ids: Collection[str] | None = None) -> None:
-        """Check the bounds; `tokenizer_ids` are manifest ids that have a tokenizer file."""
         _check_int(
             "chunking.max_tokens", self.max_tokens, CHUNK_MAX_TOKENS_MIN, CHUNK_MAX_TOKENS_MAX
         )
@@ -96,15 +93,12 @@ class ChunkingSettings:
             )
 
     def settings_hash(self) -> str:
-        """Stable SHA-256 of the settings, stored with each version (re-upload `unchanged`)."""
         payload = orjson.dumps(asdict(self), option=orjson.OPT_SORT_KEYS)
         return hashlib.sha256(payload).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
 class RetrievalSettings:
-    """Per-collection retrieval parameters."""
-
     lexical_match: LexicalMatch = LexicalMatch.ANY
     lexical_rank: LexicalRank = LexicalRank.TS_RANK
     k_lexical: int = 50
@@ -116,7 +110,6 @@ class RetrievalSettings:
     k: int = 8
 
     def validate(self) -> None:
-        """Check the bounds."""
         _check_int("retrieval.k", self.k, 1, K_MAX)
         _check_int("retrieval.k_lexical", self.k_lexical, 1, LEG_K_MAX)
         _check_int("retrieval.k_vector", self.k_vector, 1, LEG_K_MAX)
@@ -137,15 +130,12 @@ class RetrievalSettings:
 
 @dataclass(frozen=True, slots=True)
 class AnswerSettings:
-    """Per-collection answer parameters; None thresholds use the config, then calibrated values."""
-
     evidence_threshold_rerank: float | None = None
     evidence_threshold_vector: float | None = None
     prompt_template: str = "answer_v1"
     unsupported_as_abstain: bool = False
 
     def validate(self, templates: Collection[str] | None = None) -> None:
-        """Check thresholds and the template name."""
         _check_threshold("answer.evidence_threshold_rerank", self.evidence_threshold_rerank)
         _check_threshold("answer.evidence_threshold_vector", self.evidence_threshold_vector)
         if templates is not None and self.prompt_template not in templates:
@@ -154,8 +144,6 @@ class AnswerSettings:
 
 @dataclass(frozen=True, slots=True)
 class CollectionSettings:
-    """All settings of a collection."""
-
     chunking: ChunkingSettings = field(default_factory=ChunkingSettings)
     retrieval: RetrievalSettings = field(default_factory=RetrievalSettings)
     answer: AnswerSettings = field(default_factory=AnswerSettings)

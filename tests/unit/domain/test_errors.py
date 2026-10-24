@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the domain error hierarchy and its stable codes."""
 
 from __future__ import annotations
 

@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`/v1/admin`: tenants, quotas, usage, export, API keys and embedding spaces.
-
-Every route requires `Authorization: Bearer <admin key>`; tenant API keys are 401. The
-use cases run over the admin pool.
-"""
+"""Admin routes for tenants, keys and embedding spaces."""
 
 from __future__ import annotations
 
@@ -144,7 +140,7 @@ async def export_tenant(
         include_originals=include_originals,
     )
     try:
-        first = await anext(records, None)  # surfaces errors before the response starts
+        first = await anext(records, None)
     except BaseException:
         await _close(records)
         raise

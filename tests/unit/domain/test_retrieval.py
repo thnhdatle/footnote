@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for fusion, the lexical query plan, pooling and vector-path selection."""
 
 from __future__ import annotations
 

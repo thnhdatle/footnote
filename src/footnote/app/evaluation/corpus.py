@@ -1,14 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Index a BEIR corpus through Footnote's pipeline.
-
-Each corpus document becomes one plain-text upload: the BEIR title is the document title
-(it leads every chunk's embedded text), the BEIR text is the file, and the BEIR id is the
-`external_id`, so chunks pool back to BEIR documents. Uploads go through the
-`DocumentService` (checks, blob, version) and each version is indexed in-process by the
-`IngestService` (parse in the sandbox → chunk → embed → swap) with bounded concurrency.
-The queued `ingest` job is deferred (`INGEST_JOB_DELAY`) so no worker races the harness;
-it is an idempotent no-op if it ever runs, and goes with the temporary tenant.
-"""
+"""Indexes a BEIR corpus through the ingest pipeline."""
 
 from __future__ import annotations
 
@@ -32,22 +23,16 @@ type Progress = Callable[[int, int], None]
 
 
 class Uploader(Protocol):
-    """`DocumentService.upload`."""
-
     async def upload(
         self, tenant: TenantId, collection_id: CollectionId, request: UploadRequest
-    ) -> UploadResult:
-        """Store an upload and create its version."""
+    ) -> UploadResult: ...
 
 
-class CorpusIndexError(RuntimeError):
-    """Documents failed to index; the evaluation would be incomplete."""
+class CorpusIndexError(RuntimeError): ...
 
 
 @dataclass(frozen=True)
 class IndexedCorpus:
-    """Footnote document id → BEIR document id, and the ingest totals."""
-
     doc_ids: dict[DocumentId, str]
     chunks: int
     embedded: int
@@ -55,7 +40,6 @@ class IndexedCorpus:
 
 
 def upload_request(doc: CorpusDoc) -> UploadRequest:
-    """The upload of one corpus document (plain text; title and id from BEIR)."""
     body = doc.text if doc.text.strip() else doc.title
     return UploadRequest(
         filename=f"{doc.doc_id}.txt",
@@ -92,7 +76,7 @@ async def index_corpus(  # noqa: PLR0913 - the indexing inputs
     progress: Progress | None = None,
     clock: Callable[[], float] | None = None,
 ) -> IndexedCorpus:
-    """Upload and index every document; CorpusIndexError lists the failures."""
+    """Uploads and indexes every corpus document."""
     loop = asyncio.get_running_loop()
     now = clock or loop.time
     start = now()
@@ -113,7 +97,7 @@ async def index_corpus(  # noqa: PLR0913 - the indexing inputs
                     chunks, embedded = await _ingest(ingest, tenant, target)
                     totals[0] += chunks
                     totals[1] += embedded
-            except Exception as exc:  # collected: one bad document must not hide the others
+            except Exception as exc:
                 failures.append(f"{doc.doc_id}: {type(exc).__name__}: {exc}")
             done += 1
             if progress is not None:

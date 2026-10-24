@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Targeted `models/manifest.yaml` edits of `eval calibrate --apply`."""
 
 from __future__ import annotations
 

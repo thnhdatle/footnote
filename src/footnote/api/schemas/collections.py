@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Collection models: settings, re-embed progress and webhooks."""
+"""Schemas of the collection routes."""
 
 from __future__ import annotations
 
@@ -72,8 +72,6 @@ class WebhookIn(Request):
 
 
 class CollectionSettingsIn(Request):
-    """Settings shared by create and patch."""
-
     chunking: ChunkingIn | None = None
     retrieval: RetrievalIn | None = None
     answer: AnswerSettingsIn | None = None
@@ -82,7 +80,6 @@ class CollectionSettingsIn(Request):
     webhook: WebhookIn | None = None
 
     def settings_patch(self) -> SettingsPatch:
-        """The app-layer patch: only fields the client sent."""
 
         def section(model: BaseModel | None) -> dict[str, Any] | None:
             return None if model is None else model.model_dump(exclude_unset=True)
@@ -96,7 +93,6 @@ class CollectionSettingsIn(Request):
         )
 
     def webhook_patch(self) -> WebhookPatch | None:
-        """The app-layer webhook change, or None when `webhook` is absent."""
         if self.webhook is None:
             return None
         sent = self.webhook.model_fields_set
@@ -201,7 +197,6 @@ class CollectionOut(BaseModel):
 
     @classmethod
     def of(cls, info: CollectionInfo) -> CollectionOut:
-        """Build from the app-layer view."""
         r = info.record
         s = r.settings
         return cls(
@@ -228,7 +223,6 @@ class CollectionOut(BaseModel):
 
 
 def job_summary(job: JobRecord) -> JobSummary:
-    """Summary of a job row."""
     return JobSummary(id=job.id, kind=job.kind, status=job.status, progress=job.progress)
 
 
@@ -241,7 +235,6 @@ class CollectionChangeOut(CollectionOut):
 
     @classmethod
     def of_change(cls, change: CollectionChange) -> CollectionChangeOut:
-        """Build from the app-layer result."""
         base = CollectionOut.of(change.collection).model_dump()
         return cls(
             **base,
@@ -267,7 +260,6 @@ class DeliveryOut(BaseModel):
 
     @classmethod
     def of(cls, d: DeliveryRecord) -> DeliveryOut:
-        """Build from the domain record."""
         return cls(
             id=d.id,
             event=d.event,

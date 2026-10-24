@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""PDF via pdfplumber (characters, fonts, tables); pypdf only checks encryption and pages.
-
-Headings come from font size relative to each page's body size (most frequent size) and
-are levelled by the rank of their size across the document; monospace fonts are code;
-lines starting with a bullet glyph are list items; tables are emitted once as Markdown.
-"""
+"""PDF parser."""
 
 from __future__ import annotations
 
@@ -24,10 +19,10 @@ from footnote.adapters.parsers.builder import (
 from footnote.adapters.parsers.limits import ParseLimits, check_pdf
 from footnote.domain.documents import Element, ElementKind
 
-_BULLETS = ("•", "◦", "▪", "▫", "●", "○", "■", "□", "‣", "(cid:127)")  # cid: unmapped bullet
-_HEADING_MARGIN = 0.5  # points above the body size that make a line a heading
-_NEW_BLOCK_GAP = 1.6  # line-top distance, in font sizes, that starts a new block
-_CODE_BLOCK_GAP = 4.0  # code keeps blank lines, so its lines may be further apart
+_BULLETS = ("•", "◦", "▪", "▫", "●", "○", "■", "□", "‣", "(cid:127)")
+_HEADING_MARGIN = 0.5
+_NEW_BLOCK_GAP = 1.6
+_CODE_BLOCK_GAP = 4.0
 _SIZE_EPSILON = 0.05
 _SENTENCE_END = (".", "!", "?", ":", "。")
 _SPARSE_PAGE_CHARS = 100
@@ -53,7 +48,7 @@ class _Page:
     number: int
     height: float
     lines: list[_Line] = field(default_factory=list)
-    tables: list[tuple[float, str]] = field(default_factory=list)  # (top, markdown)
+    tables: list[tuple[float, str]] = field(default_factory=list)
     sizes: Counter[float] = field(default_factory=Counter)
 
 
@@ -165,8 +160,6 @@ def _continues(block: _Block, line: _Line, content_bottom: float) -> bool:
     if block.kind is ElementKind.LIST_ITEM:
         return False
     if line.page != last.page:
-        # A paragraph that ends a sentence at the page foot and is followed by a capital
-        # starts a new block; otherwise a block reaching the page foot continues.
         at_bottom = last.bottom >= content_bottom - _NEW_BLOCK_GAP * last.size
         sentence_end = last.text.endswith(_SENTENCE_END) and not line.text[0].islower()
         return block.kind is not ElementKind.HEADING and (
@@ -196,7 +189,7 @@ def _blocks(pages: list[_Page]) -> list[tuple[int, _Block | str]]:
 
 
 def parse_pdf(data: bytes, limits: ParseLimits | None = None) -> list[Element]:
-    """Parse PDF bytes into elements with 1-based `page` / `page_to`."""
+    """Parses PDF bytes into elements."""
     check_pdf(data, limits or ParseLimits())
     pages: list[_Page] = []
     with pdfplumber.open(io.BytesIO(data)) as pdf:

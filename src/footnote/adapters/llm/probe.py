@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Readiness probe of an OpenAI-compatible endpoint: `GET {base_url}/models`.
-
-Never requests a completion or an embedding, so a probe cannot load a model in LM Studio
-or consume a fakellm script entry.
-"""
+"""Readiness probe of an OpenAI-compatible endpoint."""
 
 from __future__ import annotations
 
@@ -21,7 +17,7 @@ async def models_endpoint_problems(
     api_key: str = "",
     headers: Mapping[str, str] | None = None,
 ) -> list[str]:
-    """An empty list when `GET {base_url}/models` answers 2xx, else the reason."""
+    """Returns the problems found when probing the models endpoint."""
     request_headers = dict(headers or {})
     if api_key:
         request_headers["Authorization"] = f"Bearer {api_key}"

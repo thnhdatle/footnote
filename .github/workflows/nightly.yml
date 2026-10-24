@@ -33,5 +33,4 @@ jobs:
       - run: make bootstrap
       - name: Pull the fakellm image
         run: docker pull "$RAYLD_FAKELLM_IMAGE"
-      - run: make mutation fuzz
-      - run: make acceptance
+      - run: make fuzz

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""OnnxReranker with a fake session, and the noop reranker."""
 
 from __future__ import annotations
 

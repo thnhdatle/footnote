@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Re-embedding: backfill, dual-write with concurrent ingest, one atomic switch."""
 
 from __future__ import annotations
 
@@ -59,7 +58,6 @@ async def test_reembed_backfills_then_switches_once() -> None:
     assert [(j.args, j.delay) for j in gc] == [
         ({"collection_id": str(rig.collection.id), "space_id": SPACE_A.id}, GC_GRACE)
     ]
-    # A second run (retry of a finished job) is a no-op.
     again = await rig.reembed.run(rig.tenant, rig.collection.id, target)
     assert again.status is ReembedStatus.CANCELLED
     assert rig.index.switches == [rig.collection.id]
@@ -86,7 +84,6 @@ async def test_reembed_of_an_empty_collection_switches_at_once() -> None:
 async def test_property_reembed_with_concurrent_ingest_never_mixes_spaces(
     uploads: list[tuple[str, list[int]]],
 ) -> None:
-    """Ingests between re-embed batches dual-write; queries always see one complete space."""
     rig = build()
     await rig.index_texts(P[:3], external_id="d1")
     await rig.index_texts(P[3:6], external_id="d2")
@@ -95,12 +92,11 @@ async def test_property_reembed_with_concurrent_ingest_never_mixes_spaces(
     observed: list[int] = []
 
     async def concurrent_ingest(space_id: int) -> None:
-        # Every search snapshot taken now reads one space, complete for current chunks.
         view = rig.db.search_view(rig.tenant, rig.collection.id)
         observed.extend(set(view.values()))
         if pending and space_id == target and rig.embedders.before_embed is not None:
             ext, picks = pending.pop(0)
-            rig.embedders.before_embed = None  # no recursion while this ingest embeds
+            rig.embedders.before_embed = None
             try:
                 up = await rig.upload([P[i] for i in picks], external_id=ext)
                 if not up.unchanged:
@@ -113,9 +109,9 @@ async def test_property_reembed_with_concurrent_ingest_never_mixes_spaces(
     outcome = await rig.reembed.run(rig.tenant, rig.collection.id, target)
 
     assert outcome.status is ReembedStatus.SWITCHED
-    assert len(pending) < len(uploads) or not uploads  # ingests really interleaved
+    assert len(pending) < len(uploads) or not uploads
     assert rig.index.switches == [rig.collection.id]
-    assert set(observed) <= {SPACE_A.id}  # before the switch only the old space is read
+    assert set(observed) <= {SPACE_A.id}
     assert rig.db.col(rig.tenant, rig.collection.id).active_space_id == SPACE_B.id
     assert _all_current_have(rig, SPACE_B.id)
     assert set(rig.db.search_view(rig.tenant, rig.collection.id).values()) <= {SPACE_B.id}
@@ -147,7 +143,7 @@ async def test_choosing_the_target_again_re_enqueues_a_lost_reembed_job() -> Non
     rig = build()
     target = await _start(rig)
     for job in rig.db.jobs_of(rig.tenant, "reembed"):
-        job.status = "failed"  # e.g. the enqueue after set_target_space never committed
+        job.status = "failed"
     job_id = await rig.reembed.change_space(rig.tenant, rig.collection.id, SPACE_B.name)
     assert job_id is not None
     record = await rig.jobs.get(rig.tenant, job_id)
@@ -230,8 +226,6 @@ async def test_switch_that_keeps_failing_raises_for_retry() -> None:
     counter = [0]
 
     def add_lacking_chunk() -> None:
-        # A swap slipped in a current chunk without a target vector (cannot happen with
-        # the real swap; simulates the race window between the batch query and switch).
         counter[0] += 1
         chunk = ChunkId(UUID(int=900 + counter[0]))
         first = next(iter(rig.db.chunks.values()))

@@ -1,16 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Garbage collection after swaps and switches.
-
-Runs as a `gc` job `ingest.gc_grace` after the swap or switch that made rows
-unreachable, never inside it, so a search snapshot opened before the swap can still read
-them. Two job shapes:
-
-- `{document_id}`: memberships of superseded/failed versions, chunks no current version
-  references (with their vectors), and superseded originals when
-  `ingest.retain_originals` is false;
-- `{collection_id, space_id}`: the collection's vectors of a space that is neither active
-  nor target (old space after a switch, partial target after a cancel).
-"""
+"""Garbage collection after swaps and switches."""
 
 from __future__ import annotations
 
@@ -27,8 +16,6 @@ from footnote.domain.tenancy import TenantId
 
 @dataclass(frozen=True, slots=True)
 class GcOutcome:
-    """Rows removed by one `gc` job."""
-
     memberships: int = 0
     chunks: int = 0
     blobs: int = 0
@@ -43,7 +30,7 @@ class GcService:
         self._retain = retain_originals
 
     async def run(self, tenant: TenantId, args: Mapping[str, Any]) -> GcOutcome:
-        """Dispatch on the job arguments; a deleted document or collection is a no-op."""
+        """Removes the rows that the job arguments name."""
         try:
             if "document_id" in args:
                 stats: GcStats = await self._index.gc_document(

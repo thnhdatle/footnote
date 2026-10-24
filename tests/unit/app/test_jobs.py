@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""GC, reindex, webhook jobs and the per-kind job handlers over the fakes."""
 
 from __future__ import annotations
 
@@ -25,7 +24,6 @@ P = [paragraph(f"g{n}y") for n in range(6)]
 
 
 async def _run(rig: Rig, kind: str, args: dict[str, Any] | None = None) -> FakeJobRun:
-    """Enqueue (when args are given) and run the oldest queued job of `kind`."""
     if args is not None:
         await rig.jobs.enqueue(rig.tenant, NewJob(kind, args))
     run = rig.jobs.claim(rig.tenant, kind)
@@ -39,7 +37,7 @@ async def test_gc_removes_superseded_chunks_and_keeps_shared_ones() -> None:
     v1 = await rig.index_texts(P[:3])
     v2 = await rig.index_texts([P[0], P[3]])
     assert len(rig.db.chunks) == 4
-    assert (rig.tenant, v1.version_id) not in rig.db.blobs  # dropped when v1 became ready
+    assert (rig.tenant, v1.version_id) not in rig.db.blobs
     rig.db.blobs[(rig.tenant, v1.version_id)] = b"left by a crash"  # type: ignore[index]
 
     outcome = await rig.gc.run(rig.tenant, {"document_id": str(v2.document_id)})
@@ -96,7 +94,7 @@ async def test_reindex_rechunks_changed_documents_only_once() -> None:
     await rig.collections.update(rig.tenant, rig.collection.id, settings)
     rig.embedders.calls.clear()
     for job in rig.db.jobs_of(rig.tenant, "ingest"):
-        job.status = "done"  # index_texts ran them directly
+        job.status = "done"
     run = await _run(rig, "reindex", {"collection_id": str(rig.collection.id)})
 
     assert run.progress_calls == [(0, 3), (1, 3), (2, 3), (3, 3)]
@@ -104,9 +102,8 @@ async def test_reindex_rechunks_changed_documents_only_once() -> None:
     assert len(ingest_jobs) == 3
     for _ in ingest_jobs:
         await _run(rig, "ingest")
-    # Two paragraphs now fit one chunk: a and b get one new chunk each, c is reused.
     assert len(rig.embedders.texts()) == 2
-    assert rig.parser.calls == 3  # only the original uploads were parsed
+    assert rig.parser.calls == 3
     for doc in rig.db.docs.values():
         version = rig.db.versions[(rig.tenant, doc.current_version_id)]  # type: ignore[index]
         assert version.chunking_hash == new_chunking.settings_hash()
@@ -153,7 +150,6 @@ async def test_fts_reconfig_switches_language() -> None:
     )
     assert rig.db.col(rig.tenant, rig.collection.id).settings.language is Language.ENGLISH
     assert {c.language for c in rig.db.chunks.values()} == {Language.ENGLISH}
-    # A collection deleted meanwhile is a no-op.
     await rig.reindex.fts_reconfig(rig.tenant, CollectionId(UUID(int=4)), Language.SIMPLE)
 
 
@@ -244,7 +240,6 @@ async def test_collection_delete_requires_deleting_status() -> None:
     await _run(rig, "collection_delete", args)
     assert rig.db.cols == {}
     assert rig.db.chunks == {}
-    # Already gone: done.
     await _run(rig, "collection_delete", args)
 
 

@@ -1,11 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""API test rig: every use case wired over in-memory fakes, served through httpx's
-ASGITransport (no network, no server).
-
-Two tenants (`a`, `b`), each with an API key and a collection; `rig.client` talks to
-the data plane, `rig.admin_client` to the admin listener. `rig.log` captures log lines
-(strict vocabulary: a log call with an unknown key fails the test).
-"""
 
 from __future__ import annotations
 
@@ -67,8 +60,6 @@ ANSWER_TEXT = "Beta is gamma [1]."
 
 @dataclass
 class ApiRig:
-    """Fakes, services and clients of one test."""
-
     db: FakeDb
     keys: FakeKeys
     tenants: FakeTenantAdmin
@@ -95,16 +86,13 @@ class ApiRig:
     admin_client: httpx.AsyncClient = field(init=False)
 
     def auth(self, key: str | None = None) -> dict[str, str]:
-        """Bearer header for `key` (tenant A's by default)."""
         return {"Authorization": f"Bearer {key or self.key_a}"}
 
     @property
     def admin(self) -> dict[str, str]:
-        """Bearer header with the admin key."""
         return {"Authorization": f"Bearer {ADMIN_KEY}"}
 
     def col_url(self, record: CollectionRecord | None = None, suffix: str = "") -> str:
-        """`/v1/collections/{id}` of tenant A's collection (or `record`) plus `suffix`."""
         return f"/v1/collections/{(record or self.collection_a).id}{suffix}"
 
 
@@ -117,7 +105,6 @@ def build_rig(  # noqa: PLR0913 - test knobs
     max_json_bytes: int = 64 * 1024,
     settings: CollectionSettings | None = None,
 ) -> ApiRig:
-    """Wire every use case over fresh fakes."""
     db = FakeDb()
     db.add_space(SPACE_A)
     db.add_space(SPACE_B)
@@ -216,14 +203,12 @@ def build_rig(  # noqa: PLR0913 - test knobs
 
 @pytest_asyncio.fixture
 async def rig() -> AsyncIterator[ApiRig]:
-    """A default rig; clients are closed after the test."""
     r = build_rig()
     async with r.client, r.admin_client:
         yield r
 
 
 def error_of(response: httpx.Response) -> dict[str, Any]:
-    """The `error` member of an envelope response (asserts the envelope shape)."""
     body = response.json()
     assert set(body) == {"error"}, body
     error: dict[str, Any] = body["error"]

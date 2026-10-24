@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the `webhook` job handler with in-memory collaborators."""
 
 from __future__ import annotations
 

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""OnnxEmbedder with a fake session: pooling, normalisation, batching, truncation."""
 
 from __future__ import annotations
 

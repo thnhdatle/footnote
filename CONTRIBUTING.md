@@ -32,12 +32,9 @@ Every target is idempotent and prints a one-line PASS/FAIL summary.
 | `test` | unit tests |
 | `test-integration` | integration tests (Docker) |
 | `coverage` | merged coverage, threshold check |
-| `mutation` | mutmut, threshold check |
-| `acceptance` | acceptance runner; `CI=1` for CI thresholds |
-| `bench` | benchmarks, writes `bench/RESULTS.md` |
 | `fuzz` | fuzz targets for `FUZZTIME` (default 30s) |
 | `examples` | run and check every example |
-| `quickstart-test` | build the image, run the offline quickstart criterion |
+| `quickstart-test` | build the image, run the offline quickstart |
 | `security` | pip-audit, trivy, license check |
 | `build` | wheel and sdist |
 | `docker` | local image, host architecture |
@@ -45,19 +42,14 @@ Every target is idempotent and prints a one-line PASS/FAIL summary.
 | `ci` | `lint test test-integration coverage examples security` |
 | `release-check` | pre-release checks, before tagging |
 | `release-dry` | `uv build` plus multi-arch `docker buildx build` |
+| `eval` | small eval runs, about 10 minutes (answers need LM Studio) |
 
 ## Running tests
 
 ```sh
 make test                                # unit: fast, no network, no Docker
 make test-integration                    # integration: Docker, Testcontainers
-make acceptance                          # full acceptance suite
-make acceptance ONLY=FNT-04,FNT-05       # a subset
-make acceptance CI=1                     # CI thresholds
 ```
-
-See the [acceptance suite](acceptance/README.md). Dataset-heavy criteria run when
-`FOOTNOTE_NIGHTLY=1` is set or `CI` is unset.
 
 ## Commit messages
 

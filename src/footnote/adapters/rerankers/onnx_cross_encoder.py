@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""ONNX cross-encoder reranker (raw logits for (query, passage) pairs)."""
+"""ONNX cross-encoder reranker."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from footnote.domain.errors import UpstreamError, ValidationError
 
 
 class OnnxReranker:
-    """Implements `ports.Reranker`; `model_key` is the SHA-256 of the active model file."""
+    """Scores query and passage pairs with an ONNX cross-encoder."""
 
     def __init__(  # noqa: PLR0913 - session, tokenizer and the three file-derived values
         self,
@@ -56,7 +56,7 @@ class OnnxReranker:
         batch_size: int = 32,
         intra_op_threads: int = 0,
     ) -> OnnxReranker:
-        """Load the tokenizer and the model variant (`int8` per arch, or `fp32`)."""
+        """Loads the tokenizer and model of a manifest entry."""
         file = entry.variants[reranker_variant_key(variant, arch)]
         return cls(
             open_session(local_path(models_dir, entry, file), intra_op_threads),
@@ -69,12 +69,10 @@ class OnnxReranker:
 
     @property
     def model_key(self) -> str:
-        """SHA-256 of the active model file."""
         return self._model_key
 
     @property
     def calibrated_threshold(self) -> float | None:
-        """Manifest-calibrated gate threshold of the active file."""
         return self._threshold
 
     def _score_all(self, query: str, passages: Sequence[str]) -> list[float]:
@@ -87,7 +85,7 @@ class OnnxReranker:
         return out
 
     async def score(self, query: str, passages: Sequence[str]) -> list[float]:
-        """Raw logits, one per passage."""
+        """Returns one raw logit per passage."""
         if not passages:
             return []
         try:
@@ -97,13 +95,7 @@ class OnnxReranker:
 
 
 class LazyOnnxReranker:
-    """`ports.Reranker` that loads the ONNX files on the first `score`.
-
-    `model_key` and `calibrated_threshold` come from the manifest, so the evidence gate
-    works before the files are loaded. A server started before `footnote models pull`
-    answers rerank requests with 503 (UnavailableError) until the files appear, then
-    loads them without a restart.
-    """
+    """Reranker that loads the ONNX files on first use."""
 
     def __init__(  # noqa: PLR0913 - mirrors OnnxReranker.from_manifest
         self,
@@ -132,12 +124,10 @@ class LazyOnnxReranker:
 
     @property
     def model_key(self) -> str:
-        """SHA-256 of the configured model file (from the manifest)."""
         return self._file.sha256
 
     @property
     def calibrated_threshold(self) -> float | None:
-        """Manifest-calibrated gate threshold of the configured file."""
         return self._file.calibrated_threshold
 
     def _get(self) -> OnnxReranker:
@@ -147,7 +137,6 @@ class LazyOnnxReranker:
             return self._loaded
 
     async def score(self, query: str, passages: Sequence[str]) -> list[float]:
-        """Raw logits, one per passage (loads the model first if needed)."""
         if not passages:
             return []
         reranker = await asyncio.to_thread(self._get)

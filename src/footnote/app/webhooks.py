@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ingest webhooks: turn document outcomes into `webhook` jobs.
-
-A job is built only when the collection has a URL and a secret and its `webhook.events`
-include the event. `document.ready` jobs are enqueued inside the version-swap transaction
-(only when the version becomes current); `document.failed` jobs are enqueued when an
-ingest fails for good. Delivery itself is the `webhook` job handler's work (adapter).
-"""
+"""Turns document outcomes into `webhook` jobs."""
 
 from __future__ import annotations
 
@@ -22,7 +16,7 @@ _STATUS = {WebhookEvent.DOCUMENT_READY: "ready", WebhookEvent.DOCUMENT_FAILED: "
 
 
 class WebhookNotifier:
-    """Builds and enqueues `webhook` jobs for subscribed document events."""
+    """Builds and queues `webhook` jobs for subscribed events."""
 
     def __init__(self, jobs: JobQueue, clock: Clock) -> None:
         self._jobs = jobs
@@ -35,7 +29,6 @@ class WebhookNotifier:
         version: VersionRecord,
         error: dict[str, Any] | None = None,
     ) -> NewJob | None:
-        """The `webhook` job for `event`, or None when the collection does not want it."""
         if not collection.webhook_url or not collection.webhook_secret:
             return None
         if not collection.settings.webhook.wants(event):
@@ -60,7 +53,6 @@ class WebhookNotifier:
         *,
         error: dict[str, Any] | None = None,
     ) -> JobId | None:
-        """Enqueue the job of `job_for` in its own transaction; None when not subscribed."""
         job = self.job_for(collection, event, version, error)
         if job is None:
             return None

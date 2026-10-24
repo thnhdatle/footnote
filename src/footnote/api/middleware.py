@@ -1,22 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Request middleware, in this order: recover → request id → tracing → access log →
-metrics → body limit; authentication runs as a route dependency after these.
-
-One pure ASGI middleware does the per-request bookkeeping so the order is explicit:
-
-- `X-Request-Id` is accepted when it matches `[A-Za-z0-9._-]{1,128}`, generated (ULID)
-  otherwise, stored on `request.state.request_id` and echoed on the response;
-- a server span `<METHOD> <route template>` continues an incoming W3C `traceparent`;
-- `footnote_http_requests_total{route,method,status}` and
-  `footnote_http_request_duration_seconds{route}` use the route template (never the
-  raw path, so ids never become label values; unmatched paths are `other`);
-- with `log.access_log: true`, one info line per request;
-- an exception that escapes the handlers becomes 500 `internal` (logged with its stack)
-  unless the response has already started;
-- request bodies are bounded: `Content-Length` above the limit is rejected up front
-  and a streamed body is cut off at the limit (413 `request_too_large`); multipart
-  uploads get `max_file_bytes` plus a fixed overhead and are checked exactly later.
-"""
+"""Request middleware."""
 
 from __future__ import annotations
 
@@ -47,13 +30,10 @@ type Limit = Callable[[Scope], int]
 
 
 class BodyTooLargeError(TooLargeError):
-    """The request body exceeds the limit of its route."""
-
     code = "request_too_large"
 
 
 def request_id_from(headers: list[tuple[bytes, bytes]]) -> str:
-    """The client's request id when valid, else a new ULID."""
     for name, value in headers:
         if name == REQUEST_ID_HEADER.encode():
             candidate = value.decode("latin-1")
@@ -63,7 +43,6 @@ def request_id_from(headers: list[tuple[bytes, bytes]]) -> str:
 
 
 def route_template(scope: Scope) -> str:
-    """Route path template of the request (e.g. `/v1/collections/{collection_id}`)."""
     route = scope.get("route")
     path = getattr(route, "path", None)
     if isinstance(path, str):
@@ -72,7 +51,7 @@ def route_template(scope: Scope) -> str:
     for candidate in getattr(getattr(app, "router", None), "routes", ()):
         candidate_path = getattr(candidate, "path", None)
         if not isinstance(candidate_path, str):
-            continue  # included routers carry no path of their own
+            continue
         match, _ = candidate.matches(scope)
         if match is Match.FULL:
             return candidate_path
@@ -95,7 +74,7 @@ def _limited(receive: Receive, limit: int) -> Receive:
 
 
 class RequestContextMiddleware:
-    """Per-request id, span, metrics, access log, body limit and last-resort recovery."""
+    """Adds a request id, tracing, metrics, access log and body limit to each request."""
 
     def __init__(self, app: ASGIApp, deps: ApiDeps, body_limit: Limit) -> None:
         self.app = app

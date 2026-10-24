@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Standard endpoints: `/healthz`, `/readyz`, `/metrics`, `/v1/version`.
-
-`/readyz` runs every `ReadinessCheck` of `ApiDeps` concurrently, each bounded by
-`readiness_timeout`; any problem (or a probe that fails or times out) makes it 503 with
-the problems per check. `/healthz` is 200 unless `app.state.draining` is set during
-shutdown.
-"""
+"""Health, readiness, metrics and version endpoints."""
 
 from __future__ import annotations
 
@@ -28,19 +22,18 @@ async def _run(check: ReadinessCheck, timeout: float) -> list[str]:
             return list(await check.probe())
     except TimeoutError:
         return [f"timed out after {timeout:g}s"]
-    except Exception as exc:  # a failing probe is a readiness problem, not a 500
+    except Exception as exc:
         return [f"{type(exc).__name__}: {exc}"]
 
 
 async def readiness(deps: ApiDeps) -> dict[str, list[str]]:
-    """Problems per check (empty lists when ready)."""
     timeout = deps.settings.readiness_timeout
     results = await asyncio.gather(*(_run(c, timeout) for c in deps.readiness))
     return {c.name: r for c, r in zip(deps.readiness, results, strict=True)}
 
 
 def health_router(*, include_metrics: bool, include_version: bool) -> APIRouter:
-    """Router with `/healthz`, `/readyz` and optionally `/metrics` and `/v1/version`."""
+    """Builds the router of the standard endpoints."""
     router = APIRouter(tags=["operations"])
 
     @router.get("/healthz", response_model=Health, responses=_HEALTH)
@@ -68,7 +61,6 @@ def health_router(*, include_metrics: bool, include_version: bool) -> APIRouter:
             responses={200: {"content": {"text/plain": {"schema": {"type": "string"}}}}},
         )
         async def metrics(deps: Deps) -> Response:
-            """Prometheus exposition."""
             body, content_type = deps.metrics.render()
             return Response(body, media_type=content_type)
 

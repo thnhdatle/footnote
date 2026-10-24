@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Retrieval evaluation outputs: `retrieval.csv` and `ablation.md`.
-
-One `Row` per configuration and split. Reference rows (the BEIR published numbers)
-carry only nDCG@10 and appear in `ablation.md`, not in the CSV.
-"""
+"""Writes the retrieval evaluation outputs `retrieval.csv` and `ablation.md`."""
 
 from __future__ import annotations
 
@@ -35,7 +31,6 @@ _HEADERS = {
     "mrr_at_10": "MRR@10",
 }
 
-# BEIR (Thakur et al., 2021) published nDCG@10 per dataset: BM25 and BM25 + cross-encoder.
 BEIR_REFERENCES: Mapping[str, Mapping[str, float]] = {
     "scifact": {"BM25": 0.665, "BM25+CE": 0.688},
 }
@@ -43,8 +38,6 @@ BEIR_REFERENCES: Mapping[str, Mapping[str, float]] = {
 
 @dataclass(frozen=True)
 class Row:
-    """Metrics of one configuration on one split; `group` orders the ablation sections."""
-
     name: str
     split: str
     mode: str
@@ -61,8 +54,6 @@ class Row:
 
 @dataclass(frozen=True)
 class ReportMeta:
-    """Provenance printed under the table."""
-
     run_id: str
     dataset: str
     commit: str
@@ -78,7 +69,6 @@ def _ms(value: float) -> str:
 
 
 def csv_text(rows: Sequence[Row]) -> str:
-    """The CSV document (header + one line per row, metrics with 4 decimals)."""
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(CSV_COLUMNS)
@@ -105,7 +95,6 @@ def _cell(text: str) -> str:
 
 
 def ablation_markdown(rows: Sequence[Row], meta: ReportMeta) -> str:
-    """`ablation.md`: the row table (shipped rows marked), BEIR references, provenance."""
     header = ["Configuration", "Split", "Settings", *(_HEADERS[m] for m in METRICS)]
     header += ["p50 ms", "p95 ms", "Queries"]
     lines = [
@@ -140,7 +129,7 @@ def ablation_markdown(rows: Sequence[Row], meta: ReportMeta) -> str:
 
 
 def write_reports(directory: Path, rows: Sequence[Row], meta: ReportMeta) -> tuple[Path, Path]:
-    """Write `retrieval.csv` and `ablation.md` into `directory` (created)."""
+    """Writes the CSV and the ablation report into a directory."""
     directory.mkdir(parents=True, exist_ok=True)
     csv_path = directory / "retrieval.csv"
     md_path = directory / "ablation.md"

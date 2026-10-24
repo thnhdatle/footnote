@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fixture corpus rendered once per session by the fixture generator."""
 
 from __future__ import annotations
 
@@ -14,7 +13,6 @@ _GENERATOR = Path(__file__).resolve().parents[3] / "fixtures" / "make_fixtures.p
 
 @pytest.fixture(scope="session")
 def corpus(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Directory with every generated fixture and its `.expected.json`."""
     spec = importlib.util.spec_from_file_location("make_fixtures_parsers", _GENERATOR)
     assert spec is not None
     assert spec.loader is not None

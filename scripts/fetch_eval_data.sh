@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 # Downloads and verifies the BEIR evaluation datasets listed in eval/datasets.yaml.
-# Usage: fetch_eval_data.sh [name...]   (default: every dataset in the manifest)
-# Data dir: ${FOOTNOTE_EVAL_DATA_DIR:-$HOME/.cache/rayld/footnote/datasets}. Idempotent.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 manifest="${root}/eval/datasets.yaml"

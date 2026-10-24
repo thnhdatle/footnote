@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Jobs of the in-service queue: kinds, enqueue requests, claimed jobs."""
+"""Job kinds, requests and records for the queue."""
 
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ from footnote.domain.tenancy import TenantId
 
 
 class JobKind(StrEnum):
-    """Every job kind the `jobs.kind` check constraint allows."""
-
     INGEST = "ingest"
     REINDEX = "reindex"
     FTS_RECONFIG = "fts_reconfig"
@@ -30,8 +28,6 @@ JOB_KINDS = frozenset(k.value for k in JobKind)
 
 
 class JobStatus(StrEnum):
-    """Lifecycle of a job row."""
-
     QUEUED = "queued"
     RUNNING = "running"
     DONE = "done"
@@ -40,8 +36,6 @@ class JobStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NewJob:
-    """A job to enqueue; it becomes claimable after `delay`."""
-
     kind: str
     args: Mapping[str, Any] = field(default_factory=dict)
     delay: timedelta = timedelta(0)
@@ -49,8 +43,6 @@ class NewJob:
 
 @dataclass(frozen=True, slots=True)
 class ClaimedJob:
-    """A job claimed by a worker (process it under `tenant_id`)."""
-
     id: JobId
     tenant_id: TenantId
     kind: str
@@ -58,8 +50,6 @@ class ClaimedJob:
 
 @dataclass(frozen=True, slots=True)
 class JobRecord:
-    """A job as shown by `GET /v1/jobs/{job_id}`."""
-
     id: JobId
     tenant_id: TenantId
     kind: str
@@ -75,5 +65,4 @@ class JobRecord:
     updated_at: datetime
 
 
-class PermanentJobError(Exception):
-    """Raised by a handler for errors a retry cannot fix; the job fails at once."""
+class PermanentJobError(Exception): ...

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Safety: hostile DOCX/PDF input, limits and media sniffing."""
 
 from __future__ import annotations
 
@@ -47,7 +46,6 @@ def test_billion_laughs_docx_is_not_expanded(base_docx: bytes) -> None:
     xml = f"<?xml version='1.0'?><!DOCTYPE d [{''.join(entities)}]>" + _body("&lol9;")
     data = _docx_with_xml(base_docx, xml)
 
-    # libxml2's amplification guard rejects the file; otherwise nothing may be expanded.
     with contextlib.suppress(ParseError):
         elements = parse_bytes(media.DOCX, data)
         assert sum(len(e.text) for e in elements) < 1000

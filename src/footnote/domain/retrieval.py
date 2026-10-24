@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Retrieval values: hits, ranked legs, weighted RRF, lexical query plan, pooling."""
+"""Retrieval values: hits, ranked legs, weighted RRF and the lexical query plan."""
 
 from __future__ import annotations
 
@@ -22,24 +22,18 @@ _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 @dataclass(frozen=True, slots=True)
 class LegHit:
-    """One row of a retrieval leg; `score` is ts_rank or cosine similarity."""
-
     chunk_id: ChunkId
     score: float
 
 
 @dataclass(frozen=True, slots=True)
 class RankedList:
-    """Output of one leg (`lexical` or `vector`), best first."""
-
     leg: str
     hits: tuple[LegHit, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class FusedHit:
-    """A chunk after fusion; `ranks` and `scores` are 1-based per leg where present."""
-
     chunk_id: ChunkId
     rrf_score: float
     ranks: dict[str, int] = field(default_factory=dict)
@@ -48,8 +42,6 @@ class FusedHit:
 
 @dataclass(frozen=True, slots=True)
 class Hit:
-    """A retrieved chunk with display data and per-stage scores."""
-
     chunk_id: ChunkId
     document_id: DocumentId
     title: str
@@ -70,17 +62,12 @@ def _default_weights() -> dict[str, float]:
 
 @dataclass(frozen=True, slots=True)
 class FusionConfig:
-    """Weighted reciprocal-rank-fusion parameters; `weights` is keyed by leg name."""
-
     rrf_k: int = 60
     weights: Mapping[str, float] = field(default_factory=_default_weights)
 
 
 def rrf(lists: Sequence[RankedList], config: FusionConfig) -> list[FusedHit]:
-    """Fuse ranked legs by weighted RRF.
-
-    Ties break on vector score (desc, chunks absent from the vector leg last), then chunk id.
-    """
+    """Fuses ranked legs by weighted reciprocal rank fusion."""
     totals: dict[ChunkId, float] = {}
     ranks: dict[ChunkId, dict[str, int]] = {}
     scores: dict[ChunkId, dict[str, float]] = {}
@@ -115,7 +102,6 @@ def rrf(lists: Sequence[RankedList], config: FusionConfig) -> list[FusedHit]:
 
 
 def lexical_tsquery_sql(match: LexicalMatch, language: Language) -> str:
-    """SQL tsquery expression for the lexical leg; the query text is `%(query)s`."""
     lang = f"'{language.value}'::regconfig"
     if match is LexicalMatch.ANY:
         return _ANY_TEMPLATE.replace("{lang}", lang)
@@ -125,7 +111,6 @@ def lexical_tsquery_sql(match: LexicalMatch, language: Language) -> str:
 
 
 def lexical_rank_sql(rank: LexicalRank, tsquery_alias: str = "q") -> str:
-    """SQL rank expression over `c.tsv` and the tsquery alias."""
     if not _IDENTIFIER.fullmatch(tsquery_alias):
         msg = f"invalid tsquery alias: {tsquery_alias!r}"
         raise ValueError(msg)
@@ -133,7 +118,6 @@ def lexical_rank_sql(rank: LexicalRank, tsquery_alias: str = "q") -> str:
 
 
 def pool_documents[T](document_ids: Iterable[T]) -> list[T]:
-    """Distinct ids in first-occurrence order (max pooling of a ranked list)."""
     return list(dict.fromkeys(document_ids))
 
 
@@ -142,7 +126,6 @@ def eval_order[T](
     reranked: Sequence[T] | None,
     rerank_n: int,
 ) -> list[T]:
-    """Final evaluation order: reranked head (up to `rerank_n`), then the fused remainder."""
     if reranked is None:
         return list(fused)
     head = list(reranked[:rerank_n])
@@ -151,10 +134,8 @@ def eval_order[T](
 
 
 def select_vector_path(chunk_count: int, exact_scan_max: int) -> str:
-    """`exact` for small corpora, else `hnsw`."""
     return "exact" if chunk_count <= exact_scan_max else "hnsw"
 
 
 def ef_search(configured: int, k_vector: int) -> int:
-    """HNSW `ef_search` must be at least the number of vector candidates requested."""
     return max(configured, k_vector)

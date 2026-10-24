@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit and property tests for chunking."""
 
 from __future__ import annotations
 
@@ -25,15 +24,11 @@ NBSP = chr(0xA0)
 
 
 class WordCounter:
-    """One token per whitespace-separated word."""
-
     def count(self, text: str) -> int:
         return len(text.split())
 
 
 class PunctCounter:
-    """Words and punctuation characters count separately."""
-
     def count(self, text: str) -> int:
         return len(re.findall(r"\w+|[^\w\s]", text))
 
@@ -80,9 +75,6 @@ def _texts(drafts: list[ChunkDraft]) -> list[str]:
     return [d.text for d in drafts]
 
 
-# ---------------------------------------------------------------- text helpers
-
-
 def test_normalise_text_collapses_whitespace_and_nfc() -> None:
     assert normalise_text("  a \t\n b" + NBSP + " c  ") == "a b c"
     assert normalise_text("é") == "é"
@@ -113,9 +105,6 @@ def test_content_hash_invariant_under_whitespace_and_nfd(
     noisy = "".join(w + data.draw(_WS_RUNS) for w in words)
     assert content_hash(plain) == content_hash(noisy)
     assert content_hash(plain) == content_hash(unicodedata.normalize("NFD", noisy))
-
-
-# ---------------------------------------------------------------- heading strategy
 
 
 def test_chunk_elements_heading_packs_section_exactly() -> None:
@@ -244,9 +233,6 @@ def test_chunk_elements_identical_passages_share_hash() -> None:
     assert diff_hashes([], out).new == frozenset({out[0].content_hash})
 
 
-# ---------------------------------------------------------------- min_tokens
-
-
 def test_chunk_elements_min_tokens_leaves_unmergeable_chunk() -> None:
     els = [_el(P, "a b c d e f g h i", ("S",)), _el(P, "x y", ("S",))]
     out = _chunk(els, _cfg(10, min_tokens=3))
@@ -280,9 +266,6 @@ def test_chunk_elements_min_tokens_does_not_cross_sections() -> None:
     assert _texts(_chunk(els, _cfg(10, min_tokens=5))) == ["a", "b"]
 
 
-# ---------------------------------------------------------------- recursive
-
-
 def test_chunk_elements_recursive_ignores_sections() -> None:
     els = [_el(H, "A"), _el(P, "a b c", ("A",), 1), _el(H, "B"), _el(P, "d e", ("B",), 2)]
     rec = _chunk(els, _cfg(6, strategy=ChunkingStrategyName.RECURSIVE))
@@ -303,9 +286,6 @@ def test_chunk_elements_recursive_overlap_and_min_merge() -> None:
         _cfg(7, min_tokens=2, strategy=ChunkingStrategyName.RECURSIVE),
     )
     assert _texts(merged) == ["a b c d e", "f g h i j\n\nk"]
-
-
-# ---------------------------------------------------------------- fixed
 
 
 def test_chunk_elements_fixed_windows_with_overlap() -> None:
@@ -343,9 +323,6 @@ def test_chunk_elements_fixed_overlap_never_blocks_progress() -> None:
     assert _texts(out) == ["a b", "c d e"]
 
 
-# ---------------------------------------------------------------- diff
-
-
 def _draft(h: str) -> ChunkDraft:
     return ChunkDraft(0, "t", (), "e", h, 1, None, None)
 
@@ -363,9 +340,6 @@ def test_diff_hashes_partitions_draft_hashes(existing: set[str], hashes: list[st
     assert not diff.reused & diff.new
     assert diff.reused <= existing
     assert not diff.new & existing
-
-
-# ---------------------------------------------------------------- properties
 
 
 _PROSE = st.lists(_WORDS, min_size=1, max_size=40).map(" ".join)

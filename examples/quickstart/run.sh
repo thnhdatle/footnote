@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# Quickstart: offline smoke test with the fakellm stub (README in this directory).
-# Needs the image (`make docker`), Docker Compose v2, curl and jq. Leaves the stack running;
-# stop it with `make down`.
+# Offline smoke test of the quickstart with the fakellm stub.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

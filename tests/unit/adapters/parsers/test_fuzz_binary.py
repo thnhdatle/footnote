@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Hypothesis: binary parsers (PDF, DOCX) and the dispatcher fail only with ParseError."""
 
 from __future__ import annotations
 

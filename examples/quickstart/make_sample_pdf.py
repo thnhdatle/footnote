@@ -1,9 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Generate handbook.pdf, the original sample document of the quickstart.
-
-Run from the repository root: ``uv run python examples/quickstart/make_sample_pdf.py``.
-The text is written for this project and carries no third-party licence.
-"""
 
 from __future__ import annotations
 
@@ -14,7 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
-PAGE_BREAK_BEFORE = 2  # index of the first section on page 2
+PAGE_BREAK_BEFORE = 2
 SECTIONS: list[tuple[str, list[str]]] = [
     (
         "Welcome to Acme Robotics",
@@ -61,7 +56,6 @@ SECTIONS: list[tuple[str, list[str]]] = [
 
 
 def build(path: Path) -> None:
-    """Write the PDF: the first two sections on page 1, the rest on page 2."""
     styles = getSampleStyleSheet()
     doc = SimpleDocTemplate(
         str(path),

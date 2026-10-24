@@ -1,14 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Re-embedding on a space change: backfill, dual-write, atomic switch.
-
-`change_space` sets the collection's target space and enqueues a `reembed` job (or, when
-the requested space is the active one, cancels a running re-embed and schedules GC of
-its partial vectors). The job embeds current-version chunks lacking a target vector in
-batches; meanwhile ingestion writes both spaces (the swap verifies every needed space).
-Queries read only the active space, so they never mix spaces. When nothing lacks a
-target vector, the switch transaction makes the target active (exactly once) and
-schedules GC of the old space's vectors after `gc_grace`.
-"""
+"""Re-embedding after an embedding space change."""
 
 from __future__ import annotations
 
@@ -35,16 +26,12 @@ type Progress = Callable[[int, int], Awaitable[None]]
 
 
 class ReembedStatus(StrEnum):
-    """How a `reembed` run ended."""
-
     SWITCHED = "switched"
     CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True, slots=True)
 class ReembedConfig:
-    """`embedding.batch_size`, `ingest.gc_grace` and the switch retry bound."""
-
     batch_size: int = 64
     gc_grace: timedelta = timedelta(minutes=10)
     max_switch_attempts: int = 100
@@ -52,18 +39,14 @@ class ReembedConfig:
 
 @dataclass(frozen=True, slots=True)
 class ReembedOutcome:
-    """Result of one run; `embedded` counts texts embedded by this run."""
-
     status: ReembedStatus
     embedded: int
 
 
-async def _no_progress(done: int, total: int) -> None:
-    """Default progress sink."""
+async def _no_progress(done: int, total: int) -> None: ...
 
 
 def gc_space_job(collection_id: CollectionId, space_id: int, delay: timedelta) -> NewJob:
-    """`gc` of one space's vectors in a collection (no-op once the space is in use again)."""
     args = {"collection_id": str(collection_id), "space_id": space_id}
     return NewJob(JobKind.GC.value, args, delay)
 
@@ -91,12 +74,7 @@ class ReembedService:
     async def change_space(
         self, tenant: TenantId, collection_id: CollectionId, space_name: str
     ) -> JobId | None:
-        """Point the collection at `space_name`: a `reembed` job id, or None for no job.
-
-        Choosing the active space cancels a running re-embed (GC of its partial vectors);
-        choosing the current target again changes nothing unless its `reembed` job is gone
-        (the target was set but the enqueue failed), in which case the job is enqueued again.
-        """
+        """Points the collection at another space and queues the re-embed."""
         space = await self._spaces.get(space_name)
         collection = await self._collections.get(tenant, collection_id)
         if space.id == collection.target_space_id:
@@ -137,7 +115,7 @@ class ReembedService:
         target_space_id: int,
         progress: Progress = _no_progress,
     ) -> ReembedOutcome:
-        """Backfill target vectors, then switch; stops when the target changed meanwhile."""
+        """Backfills the target space and then switches to it."""
         try:
             collection = await self._collections.get(tenant, collection_id)
         except NotFoundError:
@@ -161,7 +139,6 @@ class ReembedService:
                 continue
             if await self._index.switch_space(tenant, collection_id, jobs=(gc,)):
                 return ReembedOutcome(ReembedStatus.SWITCHED, embedded)
-            # A swap added a chunk between the batch query and the switch: go round again.
             stalls += 1
             if stalls >= self._cfg.max_switch_attempts:
                 msg = "re-embed did not converge; retrying"

@@ -53,8 +53,8 @@ export OTEL_SDK_DISABLED=true                               # keeps it off
 
 ## Test faults
 
-`testing.disable_app_tenant_predicates` is for the
-[acceptance suite](../../acceptance/README.md). Never set it in production.
+`testing.disable_app_tenant_predicates` is for the tenant-isolation fault test. Never set it in
+production.
 
 ## Options
 

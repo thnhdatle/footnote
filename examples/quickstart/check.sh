@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# Static check of the quickstart example (run by `make examples`, no Docker daemon needed):
-# the sample PDF is reproducible, the config validates and the compose override resolves.
-# The end-to-end run is `make quickstart-test`.
+# Static check of the quickstart example.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"

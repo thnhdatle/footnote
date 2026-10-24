@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Observability: structlog logging, Prometheus metrics, OpenTelemetry tracing.
-
-Main types: `make_logger` (fixed key vocabulary, JSON or text), `Metrics` (one registry per
-process, passed as a dependency), `setup_tracing` / `tracer` (off unless OTLP env is set).
-
-    log = make_logger(settings.log, component="worker")
-    log.info("job done", job_id=str(job.id), duration_ms=12)
-"""
+"""Logging, metrics and tracing."""
 
 from footnote.observability.logging import (
     ALLOWED_KEYS,

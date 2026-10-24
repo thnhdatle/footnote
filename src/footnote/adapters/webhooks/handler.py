@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The `webhook` job handler: build the payload, deliver, record the attempt.
-
-Job args: `collection_id`, `event`, `document_id`, `version`, `status`, `error`,
-`occurred_at` (the enqueuer fills them; the handler adds nothing but the signature).
-`on_attempt(status)` reports each recorded attempt (`delivered`, `pending`, `failed`) for
-`footnote_webhook_deliveries_total`.
-"""
+"""The webhook job handler."""
 
 from __future__ import annotations
 
@@ -36,31 +30,21 @@ _PAYLOAD_KEYS = (
 
 
 class JobReader(Protocol):
-    """Reads a job row (`PgJobs` implements it)."""
-
-    async def get(self, tenant: TenantId, job_id: JobId) -> JobRecord:
-        """One job of the tenant."""
+    async def get(self, tenant: TenantId, job_id: JobId) -> JobRecord: ...
 
 
 class CollectionReader(Protocol):
-    """Reads a collection with its webhook settings (`PgCollections` implements it)."""
-
-    async def get(self, tenant: TenantId, collection_id: CollectionId) -> CollectionRecord:
-        """One collection; NotFoundError when absent."""
+    async def get(self, tenant: TenantId, collection_id: CollectionId) -> CollectionRecord: ...
 
 
 class DeliveryLog(Protocol):
-    """The delivery log (`PgWebhookDeliveries` implements it)."""
+    async def attempts(self, tenant: TenantId, delivery_id: UUID) -> int: ...
 
-    async def attempts(self, tenant: TenantId, delivery_id: UUID) -> int:
-        """Attempts recorded so far."""
-
-    async def record_attempt(self, tenant: TenantId, attempt: AttemptRecord) -> None:
-        """Record one attempt."""
+    async def record_attempt(self, tenant: TenantId, attempt: AttemptRecord) -> None: ...
 
 
 class WebhookJobHandler:
-    """Callable `Handler` for kind `webhook`; retries are driven by the queue worker."""
+    """Job handler that delivers a webhook and records the attempt."""
 
     def __init__(  # noqa: PLR0913 - optional clock and metrics observer
         self,
@@ -80,7 +64,6 @@ class WebhookJobHandler:
         self._on_attempt = on_attempt
 
     async def __call__(self, ctx: JobContext) -> None:
-        """Deliver once; raise so the worker retries, or `PermanentJobError` to stop."""
         tenant = ctx.job.tenant_id
         record: JobRecord = await self._jobs.get(tenant, ctx.job.id)
         args = record.args

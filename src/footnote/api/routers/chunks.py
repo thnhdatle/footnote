@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`GET /v1/collections/{id}/chunks/{chunk_id}`."""
+"""Chunk route."""
 
 from __future__ import annotations
 

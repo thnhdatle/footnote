@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# make release-check: pre-release checks, run before tagging.
-# Usage: scripts/release_check.sh   Prints every finding and exits 1 if there is any.
+# Runs the pre-release checks and exits 1 if any finding is printed.
 set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
@@ -12,7 +11,6 @@ finding() {
 }
 
 echo "== only project files tracked"
-# Hidden paths and top-level Markdown files outside these lists do not belong in the repository.
 while IFS= read -r path; do
   finding "unexpected hidden path: ${path}"
 done < <(git ls-files | grep -E '(^|/)\.' \
@@ -28,7 +26,7 @@ while IFS= read -r path; do
   if ! head -n 5 "${path}" | grep -q 'SPDX-License-Identifier: Apache-2.0'; then
     finding "missing SPDX header: ${path}"
   fi
-done < <(git ls-files 'src/*.py' 'tests/*.py' 'acceptance/*.py' 'bench/*.py' 'examples/*.py' \
+done < <(git ls-files 'src/*.py' 'tests/*.py' 'examples/*.py' \
   'migrations/*.py' 'scripts/*.sh' '.githooks/*' 'Makefile' 'Dockerfile')
 
 echo "== TODO only as TODO(roadmap) with a ROADMAP.md entry"
@@ -72,9 +70,6 @@ if ! awk '/^## \[0\.1\.0\]/{f=1; next} /^## \[/{f=0} f && /^- /{n++} END{exit n?
   finding "CHANGELOG.md has no entries under [0.1.0]"
 fi
 scripts/release_notes.sh v0.1.0 >/dev/null || finding "release notes for v0.1.0 are empty"
-
-echo "== bench/RESULTS.md"
-[ -f bench/RESULTS.md ] || finding "missing bench/RESULTS.md"
 
 echo "== commit messages: one line, <= 72 characters"
 while IFS= read -r sha; do

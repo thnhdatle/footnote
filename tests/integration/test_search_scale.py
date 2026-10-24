@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Vector paths in a 100k-vector space (`EXPLAIN` plan checks)."""
 
 from __future__ import annotations
 
@@ -33,8 +32,6 @@ FIVE = ["solar wind", "lunar tide", "stellar dust", "comet tail", "nebula glow"]
 
 @dataclass(frozen=True)
 class Filler:
-    """The 100k-vector collection (another tenant) in the scale space."""
-
     tenant: uuid.UUID
     collection: uuid.UUID
     space_id: int
@@ -52,11 +49,6 @@ def _register(conn: psycopg.Connection[tuple[object, ...]]) -> int:
 
 @pytest.fixture(scope="module")
 def filler(pg: PgInfo) -> Iterator[Filler]:
-    """100k current-version chunks with random vectors of another tenant, then ANALYZE.
-
-    The space's HNSW index is dropped for the bulk load and rebuilt by re-registering
-    the space (registration is idempotent and recreates a missing index).
-    """
     tenant, collection, document, version = (uuid.uuid4() for _ in range(4))
     started = time.monotonic()
     with psycopg.connect(pg.admin, autocommit=True) as conn:
@@ -74,7 +66,6 @@ def filler(pg: PgInfo) -> Iterator[Filler]:
                     "n": FILLER_VECTORS,
                 },
             )
-        # A parallel build allocates maintenance_work_mem in /dev/shm (64 MB in Docker).
         conn.execute("SET maintenance_work_mem = '128MB'")
         conn.execute("SET max_parallel_maintenance_workers = 0")
         assert _register(conn) == space_id
@@ -132,7 +123,6 @@ def _bulk_load(conn: psycopg.Connection[tuple[object, ...]], p: dict[str, object
 
 @pytest_asyncio.fixture
 async def five(admin_db: Database, app_db: Database, filler: Filler) -> AsyncIterator[World]:
-    """A 5-chunk collection in the 100k-vector space."""
     yield await seed(admin_db, app_db, f"five-{uuid.uuid4().hex[:8]}", FIVE, SCALE_SPACE)
 
 
@@ -142,7 +132,7 @@ def _service(app_pool: Pool) -> SearchService:
         FakeEmbedderFactory(),
         None,
         FakeClock(),
-        SearchConfig(exact_scan_max=0),  # force the HNSW path
+        SearchConfig(exact_scan_max=0),
     )
 
 
@@ -175,13 +165,11 @@ async def test_explain_uses_partial_hnsw_and_btree_never_seq_scan(
 ) -> None:
     store = PgSearchStore(Database(app_pool))
     query = VectorQuery(l2_normalise(hash_vector("stellar dust")), 50, exact=False)
-    # Large collection: the HNSW statement is served by the space's partial index.
     async with store.snapshot(TenantId(filler.tenant), CollectionId(filler.collection)) as snap:
         hnsw = await snap.explain_vector(query, SearchFilters())
         large = await snap.vector(query, SearchFilters())
     assert f"chunk_vectors_hnsw_s{filler.space_id}" in hnsw, hnsw
     assert len(large) == 50
-    # Small collection: the exact statement reads the (tenant, collection, space) btree.
     async with store.snapshot(five.tenant, five.collection.id) as snap:
         exact = await snap.explain_vector(replace(query, exact=True), SearchFilters())
     assert "chunk_vectors_tenant_collection_space_idx" in exact, exact

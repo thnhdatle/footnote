@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`UploadInspector` adapter: content sniffing plus the synchronous upload checks.
-
-Runs `sniff` and `precheck` (pypdf page count / encryption, DOCX archive limits) in a
-worker thread so a large PDF does not block the event loop.
-"""
+"""Upload inspection by content sniffing and limit checks."""
 
 from __future__ import annotations
 
@@ -16,13 +12,12 @@ from footnote.domain.documents import InspectedFile
 
 
 class UploadChecks:
-    """Sniffs the media type from content and enforces page and archive limits."""
+    """Detects the media type of an upload and enforces its limits."""
 
     def __init__(self, limits: ParseLimits) -> None:
         self._limits = limits
 
     def check(self, data: bytes, filename: str) -> InspectedFile:
-        """Synchronous form of `inspect`."""
         media_type = sniff(data, filename)
         pages = None
         if media_type == PDF:
@@ -32,7 +27,7 @@ class UploadChecks:
         return InspectedFile(media_type, pages)
 
     async def inspect(self, data: bytes, filename: str) -> InspectedFile:
-        """Media type and page count; raises ParseError with the upload error codes."""
+        """Returns the media type and page count of an upload."""
         return await asyncio.to_thread(self.check, data, filename)
 
 

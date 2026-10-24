@@ -1,16 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Job handlers for the queue worker: one per job kind.
-
-`JobHandlers.handlers()` maps every kind except `webhook` to a handler taking a `JobRun`
-(the worker's job context). The `webhook` handler is an adapter
-(`adapters/webhooks`); the composition root merges both, so the worker knows every kind
-in `JobKind`. Handlers read their arguments from the job row, raise
-`PermanentJobError` for arguments or states a retry cannot fix, and let other errors
-propagate so the worker retries with backoff.
-
-`tenant_delete` runs over the admin pool (`TenantAdmin`): footnote_app has no privileges
-on `tenants` and `api_keys`.
-"""
+"""Job handlers for the queue worker."""
 
 from __future__ import annotations
 
@@ -43,8 +32,6 @@ def _uuid(args: Mapping[str, Any], key: str) -> UUID:
 
 @dataclass(frozen=True, slots=True)
 class JobServices:
-    """Use cases the handlers delegate to; `tenants` is the admin-pool tenant repository."""
-
     jobs: JobQueue
     collections: CollectionRepository
     ingest: IngestService
@@ -56,13 +43,13 @@ class JobServices:
 
 
 class JobHandlers:
-    """Handlers for every job kind but `webhook`."""
+    """Handlers for every job kind except `webhook`."""
 
     def __init__(self, services: JobServices) -> None:
         self._s = services
 
     def handlers(self) -> dict[str, Handler]:
-        """Kind -> handler (register with the worker together with the webhook handler)."""
+        """Maps each job kind to its handler."""
         return {
             JobKind.INGEST.value: self.ingest,
             JobKind.REINDEX.value: self.reindex,
@@ -78,7 +65,6 @@ class JobHandlers:
         return dict(record.args), record.attempts
 
     async def ingest(self, run: JobRun) -> None:
-        """Index one uploaded (or reindexed) version."""
         args, attempts = await self._args(run)
         target = IngestTarget(
             CollectionId(_uuid(args, "collection_id")),
@@ -93,13 +79,11 @@ class JobHandlers:
             raise PermanentJobError(f"{exc.code}: {exc.message}") from exc
 
     async def reindex(self, run: JobRun) -> None:
-        """Re-chunk a collection's documents after a chunking change."""
         args, _ = await self._args(run)
         collection_id = CollectionId(_uuid(args, "collection_id"))
         await self._s.reindex.reindex(run.job.tenant_id, collection_id, run.progress)
 
     async def fts_reconfig(self, run: JobRun) -> None:
-        """Switch a collection's FTS language (one transaction)."""
         args, _ = await self._args(run)
         collection_id = CollectionId(_uuid(args, "collection_id"))
         try:
@@ -109,7 +93,6 @@ class JobHandlers:
         await self._s.reindex.fts_reconfig(run.job.tenant_id, collection_id, language)
 
     async def reembed(self, run: JobRun) -> None:
-        """Backfill a collection's target space and switch."""
         args, _ = await self._args(run)
         collection_id = CollectionId(_uuid(args, "collection_id"))
         try:
@@ -119,7 +102,6 @@ class JobHandlers:
         await self._s.reembed.run(run.job.tenant_id, collection_id, target, run.progress)
 
     async def gc(self, run: JobRun) -> None:
-        """Post-swap / post-switch garbage collection."""
         args, _ = await self._args(run)
         try:
             await self._s.gc.run(run.job.tenant_id, args)
@@ -127,7 +109,6 @@ class JobHandlers:
             raise PermanentJobError(str(exc)) from exc
 
     async def collection_delete(self, run: JobRun) -> None:
-        """Remove a `deleting` collection's rows."""
         args, _ = await self._args(run)
         collection_id = CollectionId(_uuid(args, "collection_id"))
         tenant = run.job.tenant_id
@@ -140,7 +121,6 @@ class JobHandlers:
         await self._s.collections.delete_rows(tenant, collection_id)
 
     async def tenant_delete(self, run: JobRun) -> None:
-        """Remove every row of a `deleting` tenant, this job's row included (admin pool)."""
         tenant_id = run.job.tenant_id
         try:
             tenant = await self._s.tenants.get_tenant(tenant_id)

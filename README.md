@@ -103,8 +103,8 @@ and `abstained`. Tenants, keys, real LLMs, webhooks and operations are covered i
 
 ## Performance
 
-MacBook Pro M3 Pro 36 GB, Docker VM 8 CPU / 10 GB. Method and full results in
-[bench/RESULTS.md](bench/RESULTS.md).
+MacBook Pro M3 Pro 36 GB, Docker VM 8 CPU / 10 GB, Footnote v0.1.0. Retrieval on the 300 SciFact
+test claims; latency over 1,000 queries against 100,000 chunks, median of 3 runs.
 
 | Scenario | Result |
 |---|---|

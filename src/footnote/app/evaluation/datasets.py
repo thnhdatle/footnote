@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""BEIR-layout evaluation datasets: `corpus.jsonl`, `queries.jsonl`, `qrels/*.tsv`.
-
-Datasets are downloaded by `scripts/fetch_eval_data.sh` into the eval data directory
-(`FOOTNOTE_EVAL_DATA_DIR`, default `~/.cache/rayld/footnote/datasets`) and never committed.
-"""
+"""Loads BEIR-layout evaluation datasets."""
 
 from __future__ import annotations
 
@@ -19,8 +15,6 @@ DEFAULT_DATA_DIR = "~/.cache/rayld/footnote/datasets"
 
 @dataclass(frozen=True)
 class CorpusDoc:
-    """One corpus document."""
-
     doc_id: str
     title: str
     text: str
@@ -28,9 +22,6 @@ class CorpusDoc:
 
 @dataclass(frozen=True)
 class BeirDataset:
-    """A loaded dataset. `corpus` keeps file order; `qrels` is split → query id → doc id →
-    relevance, with query ids (and doc ids) in qrels file order of first occurrence."""
-
     name: str
     corpus: dict[str, CorpusDoc]
     queries: dict[str, str]
@@ -38,7 +29,6 @@ class BeirDataset:
 
 
 def dataset_dir(name: str, data_dir: Path | None = None) -> Path:
-    """Directory of dataset `name`; raises FileNotFoundError when it is not fetched."""
     base = data_dir or Path(os.environ.get(DATA_DIR_ENV) or DEFAULT_DATA_DIR).expanduser()
     path = base / name
     if not (path / "corpus.jsonl").is_file():
@@ -59,7 +49,7 @@ def _jsonl(path: Path) -> list[dict[str, object]]:
 def _load_qrels(path: Path) -> dict[str, dict[str, int]]:
     result: dict[str, dict[str, int]] = {}
     with path.open(encoding="utf-8") as handle:
-        next(handle, None)  # header
+        next(handle, None)
         for line in handle:
             parts = line.rstrip("\r\n").split("\t")
             if len(parts) < 3:  # noqa: PLR2004 - query, doc, score
@@ -69,7 +59,7 @@ def _load_qrels(path: Path) -> dict[str, dict[str, int]]:
 
 
 def load_beir(path: Path, name: str | None = None) -> BeirDataset:
-    """Load a dataset directory in BEIR layout (name defaults to the directory name)."""
+    """Loads a dataset directory in BEIR layout."""
     corpus: dict[str, CorpusDoc] = {}
     for row in _jsonl(path / "corpus.jsonl"):
         doc_id = str(row["_id"])
@@ -84,5 +74,4 @@ def load_beir(path: Path, name: str | None = None) -> BeirDataset:
 
 
 def query_ids(dataset: BeirDataset, split: str) -> list[str]:
-    """Distinct query ids of `split` in qrels file order (first occurrence)."""
     return list(dataset.qrels.get(split, {}))

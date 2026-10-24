@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Outbound webhook network policy: URL parsing and address screening.
-
-Pure stdlib and free of I/O: the caller resolves the host and passes the addresses in,
-then connects to the address returned by `check_addresses` (no re-resolution).
-"""
+"""Outbound webhook network policy: URL parsing and address screening."""
 
 from __future__ import annotations
 
@@ -33,8 +29,6 @@ _V6_MAPPED = ipaddress.IPv6Network("::ffff:0:0/96")
 
 @dataclass(frozen=True)
 class WebhookTarget:
-    """A validated webhook destination; `host` has no brackets, `path_qs` starts with `/`."""
-
     scheme: str
     host: str
     port: int
@@ -46,7 +40,7 @@ def _reject(message: str) -> ValidationError:
 
 
 def parse_webhook_url(url: str, *, allow_http: bool) -> WebhookTarget:
-    """Parse and vet a webhook URL; address checks happen after resolution."""
+    """Parses and vets a webhook URL."""
     if len(url) > _MAX_URL_LENGTH:
         raise _reject(f"url is longer than {_MAX_URL_LENGTH} characters")
     if not url.isprintable() or " " in url:
@@ -106,7 +100,6 @@ def _parse(
 
 
 def is_public_address(addr: str | ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """True when `addr` is a well-formed, globally routable unicast address."""
     parsed = _parse(addr)
     if parsed is None:
         return False
@@ -121,7 +114,7 @@ def is_public_address(addr: str | ipaddress.IPv4Address | ipaddress.IPv6Address)
 
 
 def check_addresses(addresses: Sequence[str], *, allow_private: bool) -> str:
-    """Vet every resolved address and return the first one, the one to connect to."""
+    """Vets the resolved addresses and returns the one to connect to."""
     if not addresses:
         raise _reject("host did not resolve to any address")
     for address in addresses:

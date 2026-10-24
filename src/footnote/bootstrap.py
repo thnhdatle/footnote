@@ -1,21 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Composition root: config → adapters → use cases → API.
-
-Only this module and `__main__` import both `api` and `adapters`. `open_runtime` opens the
-two pools (footnote_app and footnote_admin), the HTTP clients and the ML adapters, wires
-every use case, the job handlers (including the `webhook` adapter handler and
-`tenant_delete` over the admin pool) and the readiness checks, registers the configured
-embedding spaces, and closes everything in reverse order. `serve` runs the data plane and
-the admin listener with uvicorn (optionally the worker in-process); `run_worker` runs the
-queue worker next to the admin listener. Both stop on `stop` (SIGTERM/SIGINT in the CLI):
-stop accepting, drain in-flight requests and jobs (bounded by `shutdown_timeout`), flush
-traces, close the pools.
-
-Usage::
-
-    settings = load_settings()
-    asyncio.run(serve(settings, with_worker=True))
-"""
+"""Composition root: builds the services, adapters and servers from the settings."""
 
 from __future__ import annotations
 
@@ -106,15 +90,12 @@ _ANY_HOST = "0.0.0.0"  # noqa: S104 - an empty listen host means every interface
 
 @dataclass(frozen=True, slots=True)
 class BuildInfo:
-    """Version and build metadata (`/v1/version`, `footnote_build_info`)."""
-
     version: str
     commit: str = "unknown"
     build_date: str = "unknown"
 
 
 def build_info(env: Mapping[str, str] | None = None) -> BuildInfo:
-    """Package version plus `FOOTNOTE_BUILD_COMMIT` / `FOOTNOTE_BUILD_DATE` (image build args)."""
     source = os.environ if env is None else env
     try:
         version = pkg_version(PACKAGE)
@@ -128,22 +109,14 @@ def build_info(env: Mapping[str, str] | None = None) -> BuildInfo:
 
 
 class SystemClock:
-    """`ports.Clock` over the system clocks."""
-
     def now(self) -> float:
-        """Wall-clock seconds since the epoch."""
         return time.time()
 
     def monotonic(self) -> float:
-        """Monotonic seconds (durations)."""
         return time.monotonic()
 
 
-# --- configuration checks that need the model manifest ---------------------------------
-
-
 def required_dsn(settings: Settings, *, admin: bool) -> str:
-    """The app or admin DSN; ConfigError (exit 2) when neither env nor `*_file` sets it."""
     section, env = (
         ("admin_database", "FOOTNOTE_ADMIN_DATABASE_URL")
         if admin
@@ -156,7 +129,6 @@ def required_dsn(settings: Settings, *, admin: bool) -> str:
 
 
 def load_model_manifest(settings: Settings) -> Manifest:
-    """The manifest named by `models.manifest`; ConfigError when unreadable."""
     try:
         return load_manifest(settings.models.manifest)
     except ValidationError as exc:
@@ -164,7 +136,6 @@ def load_model_manifest(settings: Settings) -> Manifest:
 
 
 def manifest_problems(settings: Settings, manifest: Manifest) -> list[str]:
-    """Config references the manifest cannot satisfy (every problem, not the first)."""
     problems: list[str] = []
     for i, space in enumerate(settings.embedding.spaces):
         if space.provider != PROVIDER_ONNX:
@@ -194,7 +165,6 @@ def manifest_problems(settings: Settings, manifest: Manifest) -> list[str]:
 
 
 def required_models(settings: Settings, manifest: Manifest) -> list[ModelNeed]:
-    """The manifest files this configuration loads (ONNX spaces, reranker, tokenizer)."""
     keys: dict[str, set[str]] = {}
     for space in settings.embedding.spaces:
         if space.provider == PROVIDER_ONNX and space.model in manifest.models:
@@ -211,8 +181,6 @@ def required_models(settings: Settings, manifest: Manifest) -> list[ModelNeed]:
 
 
 def space_completer(manifest: Manifest) -> Callable[[SpaceSpec], SpaceSpec]:
-    """Fills dimensions and the calibrated threshold of `onnx_local` spaces (precedence:
-    request/config value, then the manifest value)."""
 
     def complete(spec: SpaceSpec) -> SpaceSpec:
         if spec.provider == PROVIDER_OPENAI:
@@ -240,7 +208,6 @@ def space_completer(manifest: Manifest) -> Callable[[SpaceSpec], SpaceSpec]:
 
 
 def space_specs(settings: Settings) -> list[SpaceSpec]:
-    """`embedding.spaces` as registration specs (dimensions 0 = from the manifest)."""
     return [
         SpaceSpec(
             name=s.name,
@@ -276,13 +243,8 @@ def _admin_service(
     )
 
 
-# --- pools ------------------------------------------------------------------------------
-
-
 @dataclass(frozen=True, slots=True)
 class Pools:
-    """The footnote_app and footnote_admin databases."""
-
     app: Database
     admin: Database
 
@@ -319,7 +281,6 @@ async def _open_pools(settings: Settings, stack: AsyncExitStack, predicates: boo
 
 @asynccontextmanager
 async def open_admin(settings: Settings) -> AsyncIterator[AdminService]:
-    """AdminService over the admin pool only (CLI `tenants`, `keys`, `spaces`)."""
     manifest = load_model_manifest(settings)
     pool = await open_pool(
         PoolSettings(
@@ -335,13 +296,8 @@ async def open_admin(settings: Settings) -> AsyncIterator[AdminService]:
         await pool.close()
 
 
-# --- the runtime ------------------------------------------------------------------------
-
-
 @dataclass(slots=True)
 class Runtime:
-    """Everything a process serves from; built and closed by `open_runtime`."""
-
     settings: Settings
     info: BuildInfo
     metrics: Metrics
@@ -355,19 +311,15 @@ class Runtime:
 
 
 type EmbedderWrapper = Callable[[EmbeddingSpace, Embedder], Embedder]
-"""Decorates the embedder of a space (the eval harness wraps it in its cache)."""
 
 
 class WrappedEmbedders:
-    """`EmbedderFactory` serving `wrap(space, inner.for_space(space))`, one per space id."""
-
     def __init__(self, inner: EmbedderFactory, wrap: EmbedderWrapper) -> None:
         self._inner = inner
         self._wrap = wrap
         self._cache: dict[int, Embedder] = {}
 
     def for_space(self, space: EmbeddingSpace) -> Embedder:
-        """The wrapped embedder of `space` (built once)."""
         cached = self._cache.get(space.id)
         if cached is None:
             cached = self._wrap(space, self._inner.for_space(space))
@@ -386,10 +338,6 @@ class _Ml:
 def make_reranker(
     settings: Settings, manifest: Manifest, variant: str | None = None, arch: str | None = None
 ) -> Reranker | None:
-    """The configured reranker (`rerank.*`), optionally with another file `variant`
-    (`int8` | `fp32`) and, for `int8`, another `arch` (`arm64` | `amd64`; default: this
-    host; ONNX Runtime runs either INT8 file on any CPU, used by `eval calibrate`); None
-    with the `noop` provider. Files load on the first score."""
     r = settings.rerank
     if r.provider != "onnx_cross_encoder":
         return None
@@ -606,16 +554,12 @@ def _webhook_handler(
 
 
 def job_handlers(services: JobServices, webhook: Handler) -> dict[str, Handler]:
-    """Every job kind's handler: the app-layer handlers plus the `webhook` adapter handler."""
     handlers: dict[str, Handler] = dict(JobHandlers(services).handlers())
     handlers[JobKind.WEBHOOK.value] = webhook
     missing = {k.value for k in JobKind} - handlers.keys()
     if missing:  # pragma: no cover - guarded by a unit test
         raise RuntimeError(f"no handler for job kinds {sorted(missing)}")
     return handlers
-
-
-# --- readiness --------------------------------------------------------------------------
 
 
 def _readiness(
@@ -676,11 +620,7 @@ def _endpoint_checks(settings: Settings, client: httpx.AsyncClient) -> list[Read
     return checks
 
 
-# --- open_runtime -----------------------------------------------------------------------
-
-
 async def register_spaces(admin: AdminService, settings: Settings) -> None:
-    """Register `embedding.spaces` over the admin pool (idempotent by name)."""
     for spec in space_specs(settings):
         await admin.register_space(spec)
 
@@ -693,10 +633,7 @@ async def open_runtime(
     env: Mapping[str, str] | None = None,
     embedder_wrapper: EmbedderWrapper | None = None,
 ) -> AsyncIterator[Runtime]:
-    """Open pools, clients and adapters, wire the use cases; close all on exit.
-
-    `embedder_wrapper` decorates every space's embedder (eval cache only).
-    """
+    """Build the runtime with its pools, services and job handlers."""
     info = info or build_info(env)
     log = make_logger(settings.log, component="bootstrap")
     manifest = load_model_manifest(settings)
@@ -793,9 +730,6 @@ async def _wire(  # noqa: PLR0913 - the composition root's inputs
 
 
 async def delete_tenant_now(rt: Runtime, tenant: TenantId) -> None:
-    """Delete a tenant and all its data in this process (eval temporary tenants):
-    `AdminService.delete_tenant` revokes its keys and queues `tenant_delete`, whose handler
-    runs here directly instead of waiting for a worker (it removes the job row too)."""
     job_id = await rt.admin.delete_tenant(tenant)
     handler = rt.handlers[JobKind.TENANT_DELETE.value]
     await handler(
@@ -803,18 +737,13 @@ async def delete_tenant_now(rt: Runtime, tenant: TenantId) -> None:
     )
 
 
-# --- processes --------------------------------------------------------------------------
-
-
 def split_listen(address: str) -> tuple[str, int]:
-    """`host:port` → (host, port); `[v6]:port` unwrapped; an empty host binds all."""
     host, _, port = address.rpartition(":")
     host = host.strip("[]") or _ANY_HOST
     return host, int(port)
 
 
 def bind(address: str) -> socket.socket:
-    """A listening TCP socket for `address` (port 0 picks a free port)."""
     host, port = split_listen(address)
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     sock = socket.socket(family, socket.SOCK_STREAM)
@@ -829,17 +758,13 @@ def bind(address: str) -> socket.socket:
 
 
 def bound_address(sock: socket.socket) -> str:
-    """`host:port` actually bound (resolves port 0)."""
     host, port = sock.getsockname()[:2]
     return f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
 
 
 class _Server(uvicorn.Server):
-    """uvicorn server whose signals are handled by the composition root."""
-
     @contextlib.contextmanager
     def capture_signals(self) -> Iterator[None]:
-        """No-op: `serve`/`run_worker` own SIGTERM/SIGINT."""
         yield
 
 
@@ -858,12 +783,10 @@ def _server(app: FastAPI, settings: Settings) -> _Server:
 
 
 def worker_id() -> str:
-    """Unique id of this process's worker (`hostname-pid-random`)."""
     return f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
 
 def make_worker(rt: Runtime) -> Worker:
-    """The queue worker over every job handler (`ingest.*` settings)."""
     i = rt.settings.ingest
     return Worker(
         rt.jobs,
@@ -882,11 +805,10 @@ def make_worker(rt: Runtime) -> Worker:
 
 
 async def report_queue_depth(rt: Runtime, stop: asyncio.Event, interval: float) -> None:
-    """Refresh `footnote_jobs_queue_depth{kind}` from the admin pool until `stop`."""
     while not stop.is_set():
         try:
             depth = await pg_health.queue_depth(rt.pools.admin)
-        except Exception as exc:  # a DB blip must not stop the worker
+        except Exception as exc:
             rt.log.warning("queue depth query failed", error=str(exc))
         else:
             for kind in JobKind:
@@ -910,8 +832,6 @@ type ReadyCallback = Callable[[Mapping[str, str]], None]
 
 @dataclass(frozen=True, slots=True)
 class ServeOptions:
-    """What `run_process` serves: the data plane (serve) and/or the worker."""
-
     data_plane: bool = True
     worker: bool = False
     on_ready: ReadyCallback | None = None
@@ -923,7 +843,7 @@ async def run_process(
     stop: asyncio.Event,
     env: Mapping[str, str] | None = None,
 ) -> None:
-    """Serve until `stop` is set, then shut down gracefully."""
+    """Run the data plane and the worker until the stop event is set."""
     tracing = setup_tracing(version=build_info(env).version, env=env)
     try:
         async with open_runtime(settings, env=env) as rt:
@@ -972,7 +892,6 @@ async def _shutdown(
     worker_stop: asyncio.Event,
     admin: tuple[_Server, asyncio.Task[None]],
 ) -> None:
-    """Drain order: data plane and worker first (bounded), the admin listener last."""
     for app in apps:
         app.state.draining = True
     for server, _ in servers:
@@ -990,5 +909,4 @@ async def _shutdown(
 
 
 def is_domain_error(exc: BaseException) -> bool:
-    """Startup failures shown as one line (no traceback) by the CLI."""
     return isinstance(exc, DomainError | OSError)

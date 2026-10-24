@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Render Markdown fixture sources to PDF, DOCX, HTML, MD and TXT with expected elements.
-
-Expected elements derive from the sources (and the PDF page log recorded while
-reportlab draws), never from footnote's parsers.
-"""
+"""Render Markdown fixture sources to PDF, DOCX, HTML, MD and TXT with expected elements."""
 
 from __future__ import annotations
 
@@ -42,9 +38,7 @@ FRONT_MATTER = "---\ntitle: Ignored front matter\ntags: [fixture]\n---\n\n"
 
 @dataclass(frozen=True)
 class Block:
-    """One block of the restricted Markdown subset."""
-
-    kind: str  # heading | paragraph | list_item | table | code
+    kind: str
     text: str
     level: int | None = None
     rows: tuple[tuple[str, ...], ...] = field(default=())
@@ -59,7 +53,6 @@ def _is_separator(cells: tuple[str, ...]) -> bool:
 
 
 def table_text(rows: tuple[tuple[str, ...], ...]) -> str:
-    """Markdown table text: header, `|---|` separator, body rows."""
     head = "| " + " | ".join(rows[0]) + " |"
     sep = "|" + "|".join("---" for _ in rows[0]) + "|"
     body = ["| " + " | ".join(r) + " |" for r in rows[1:]]
@@ -67,7 +60,6 @@ def table_text(rows: tuple[tuple[str, ...], ...]) -> str:
 
 
 def parse_source(text: str) -> list[Block]:
-    """Parse the restricted Markdown subset into blocks."""
     blocks: list[Block] = []
     para: list[str] = []
     lines = text.splitlines()
@@ -131,7 +123,6 @@ def _element(block: Block, order: int, path: tuple[str, ...], **extra: Any) -> d
 def expected_elements(
     blocks: list[Block], pages: dict[int, tuple[int, int]] | None = None
 ) -> list[dict[str, Any]]:
-    """Expected elements; `pages` maps block index to (page, page_to) for PDFs."""
     out: list[dict[str, Any]] = []
     stack: list[tuple[int, str]] = []
     for idx, block in enumerate(blocks):
@@ -147,7 +138,6 @@ def expected_elements(
 
 
 def txt_blocks(blocks: list[Block]) -> list[Block]:
-    """TXT keeps only prose: headings and list items become plain paragraphs."""
     return [
         Block("paragraph", b.text)
         for b in blocks
@@ -155,12 +145,7 @@ def txt_blocks(blocks: list[Block]) -> list[Block]:
     ]
 
 
-# ---------------------------------------------------------------- PDF
-
-
 class _Doc(SimpleDocTemplate):
-    """Doc template logging the pages every block is drawn on."""
-
     def __init__(self, filename: str, **kw: Any) -> None:
         super().__init__(filename, **kw)
         self.page_log: dict[int, tuple[int, int]] = {}
@@ -187,7 +172,6 @@ def _escape(text: str) -> str:
 
 
 def render_pdf(blocks: list[Block], path: Path) -> dict[int, tuple[int, int]]:
-    """Render PDF; return the page log (block index -> (page, page_to))."""
     doc = _Doc(
         str(path),
         pagesize=A4,
@@ -248,11 +232,7 @@ def render_pdf(blocks: list[Block], path: Path) -> dict[int, tuple[int, int]]:
     return doc.page_log
 
 
-# ---------------------------------------------------------------- DOCX
-
-
 def render_docx(blocks: list[Block], path: Path) -> None:
-    """Render DOCX with Heading N / List Bullet styles, grid tables and Code style."""
     doc = Document()
     code_style = doc.styles.add_style("Code", WD_STYLE_TYPE.PARAGRAPH)
     code_style.font.name = "Courier New"
@@ -284,11 +264,7 @@ def render_docx(blocks: list[Block], path: Path) -> None:
     doc.save(str(path))
 
 
-# ---------------------------------------------------------------- HTML / MD / TXT
-
-
 def render_html(blocks: list[Block], title: str) -> str:
-    """HTML with nav, footer and script boilerplate that parsers must strip."""
     parts = [
         "<!doctype html>",
         '<html lang="en"><head><meta charset="utf-8">',
@@ -332,11 +308,7 @@ def render_html(blocks: list[Block], title: str) -> str:
 
 
 def render_txt(blocks: list[Block]) -> str:
-    """Paragraphs separated by blank lines."""
     return "\n\n".join(b.text for b in txt_blocks(blocks)) + "\n"
-
-
-# ---------------------------------------------------------------- driver
 
 
 def _write_json(path: Path, elements: list[dict[str, Any]]) -> None:
@@ -347,7 +319,6 @@ def _write_json(path: Path, elements: list[dict[str, Any]]) -> None:
 
 
 def generate(out_dir: Path) -> list[Path]:
-    """Write every fixture and its `.expected.json` into `out_dir`; return the paths."""
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
@@ -385,7 +356,6 @@ def generate(out_dir: Path) -> list[Path]:
 
 
 def main() -> None:
-    """CLI entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()

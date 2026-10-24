@@ -1,14 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The HTTP API over real Postgres: tenants and keys created through the admin API,
-a document uploaded and indexed through the tenant API, then every tenant route probed
-with another tenant's key (404, never 403, nothing changed), key revocation and tenant
-deletion (401), and the admin export.
-
-Real: Postgres + RLS (testcontainers), every Postgres adapter, the upload checks and the
-sandboxed parser. Fake: the embedder (deterministic vectors), the token counter and the
-LLM. The cross-tenant run repeats with the app-side tenant predicates removed, so RLS
-alone must isolate tenants through the HTTP layer.
-"""
 
 from __future__ import annotations
 
@@ -103,8 +93,6 @@ class _Resolver:
 
 @dataclass
 class Stack:
-    """The wired API plus the ingest use case that stands in for the worker."""
-
     client: httpx.AsyncClient
     ingest: IngestService
     jobs: PgJobs
@@ -123,7 +111,6 @@ class Stack:
 
 
 def wire(app_db: Database, admin_db: Database) -> tuple[ApiDeps, IngestService, PgJobs]:
-    """Every use case over the real Postgres adapters (what bootstrap will do)."""
     collections = PgCollections(app_db)
     documents = PgDocuments(app_db)
     index = PgIndex(app_db)
@@ -195,13 +182,11 @@ def wire(app_db: Database, admin_db: Database) -> tuple[ApiDeps, IngestService, 
 
 @pytest.fixture(params=[True, False], ids=["predicates", "rls-only"])
 def app_db_mode(app_pool: Pool, request: pytest.FixtureRequest) -> Database:
-    """App database with and without the defence-in-depth tenant predicates."""
     return Database(app_pool, app_tenant_predicates=bool(request.param))
 
 
 @pytest_asyncio.fixture
 async def stack(app_db_mode: Database, admin_db: Database) -> AsyncIterator[Stack]:
-    """The data-plane app over real adapters."""
     deps, ingest, jobs = wire(app_db_mode, admin_db)
     transport = httpx.ASGITransport(app=create_app(deps))
     async with httpx.AsyncClient(transport=transport, base_url="http://it") as client:
@@ -212,12 +197,10 @@ ADMIN = {"Authorization": f"Bearer {ADMIN_KEY}"}
 
 
 def bearer(key: str) -> dict[str, str]:
-    """Tenant auth header."""
     return {"Authorization": f"Bearer {key}"}
 
 
 async def _tenant(stack: Stack, name: str) -> tuple[str, str, str]:
-    """(tenant id, key, key id) created through the admin API."""
     created = await stack.client.post(
         "/v1/admin/tenants", headers=ADMIN, json={"name": f"{name}-{uuid.uuid4().hex[:6]}"}
     )
@@ -249,7 +232,7 @@ async def _seed(stack: Stack, name: str) -> Seeded:
     up = await stack.client.post(
         f"/v1/collections/{cid}/documents",
         headers=bearer(key),
-        files={"file": ("orchard.md", DOCUMENT, "application/pdf")},  # header is ignored
+        files={"file": ("orchard.md", DOCUMENT, "application/pdf")},
         data={"external_id": "orchard", "metadata": orjson.dumps({"team": name}).decode()},
     )
     assert up.status_code == 202, up.text
@@ -359,7 +342,7 @@ async def test_revoked_rotated_and_deleted_keys(stack: Stack) -> None:
     )
     assert rotated.status_code == 201
     new_key = rotated.json()["key"]
-    for key in (a.key, new_key):  # the old key stays valid during the grace period
+    for key in (a.key, new_key):
         ok = await stack.client.get("/v1/collections", headers=bearer(key))
         assert ok.status_code == 200
     revoked = await stack.client.delete(

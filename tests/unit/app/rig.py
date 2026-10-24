@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A wired set of ingestion use cases over the repository fakes."""
 
 from __future__ import annotations
 
@@ -47,20 +46,16 @@ from .fakes import (
 SPACE_A = EmbeddingSpace(1, "space-a", "fake", "model-a", DIMS)
 SPACE_B = EmbeddingSpace(2, "space-b", "fake", "model-b", DIMS)
 GC_GRACE = timedelta(minutes=10)
-# One paragraph per chunk: 32-token budget, paragraphs of > 16 words, no overlap/merging.
 CHUNKING = ChunkingSettings(
     strategy=ChunkingStrategyName.RECURSIVE, max_tokens=32, overlap_tokens=0, min_tokens=0
 )
 
 
 def paragraph(word: str) -> str:
-    """A 20-word paragraph unique to `word`."""
     return " ".join(f"{word}{n}" for n in range(20))
 
 
 class SpaceEmbedder:
-    """Deterministic per-space embedder recording every text it embeds."""
-
     def __init__(self, space: EmbeddingSpace, owner: RecordingEmbedders) -> None:
         self.space = space
         self.owner = owner
@@ -80,8 +75,6 @@ class SpaceEmbedder:
 
 @dataclass
 class RecordingEmbedders:
-    """EmbedderFactory with failure injection."""
-
     calls: list[tuple[int, list[str]]] = field(default_factory=list)
     error: Exception | None = None
     limit: int | None = None
@@ -96,8 +89,6 @@ class RecordingEmbedders:
 
 @dataclass
 class Rig:
-    """Fakes plus every use case wired over them."""
-
     db: FakeDb
     tenant: TenantId
     collection: CollectionRecord
@@ -231,7 +222,6 @@ def build(  # noqa: PLR0913 - test rig knobs
 def db_create(
     collections: FakeCollections, tenant: TenantId, settings: CollectionSettings, *, webhook: bool
 ) -> CollectionRecord:
-    """Create the test collection (space A, optional webhook)."""
     return collections.create_now(
         tenant,
         NewCollection(

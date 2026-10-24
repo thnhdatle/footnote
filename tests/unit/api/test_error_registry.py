@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Every error code the code base can emit is registered in docs/guides/errors.md,
-with the HTTP status the API actually uses."""
 
 from __future__ import annotations
 
@@ -16,9 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 REGISTRY = ROOT / "docs" / "guides" / "errors.md"
 _ROW = re.compile(r"^\| `([a-z_]+)` \| (\d{3}) \|", re.MULTILINE)
 _ANY_CODE = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
-# `code="…"`, `code = "…"` and module constants holding codes, across src/.
 _SOURCE_CODE = re.compile(r"""\bcode\s*=\s*"([a-z_]+)"|^[A-Z_]+ = "([a-z]+(?:_[a-z]+)+)"$""", re.M)
-# Constants that look like codes but are not error codes.
 _NOT_CODES = {
     "onnx_local",
     "openai_compat",

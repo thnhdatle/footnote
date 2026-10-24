@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Cursor pagination: `?limit=&cursor=`, `{"data": […], "next_cursor": …}`.
-
-Cursors are opaque URL-safe tokens wrapping the id (UUID, or integer for
-embedding spaces) of the last row of the previous page (keyset pagination over ids).
-`limit` defaults to 50, at most 500.
-"""
+"""Cursor pagination."""
 
 from __future__ import annotations
 
@@ -29,7 +24,7 @@ Cursor = Annotated[
 
 
 def encode_cursor(last_id: UUID | int) -> str:
-    """Cursor pointing after `last_id`."""
+    """Encodes a cursor that points after an id."""
     raw = (_PREFIX + str(last_id)).encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
@@ -45,12 +40,11 @@ def _decode[T](cursor: str, parse: Callable[[str], T]) -> T:
 
 
 def decode_cursor(cursor: str | None) -> UUID | None:
-    """The UUID a cursor points after; 422 `validation_failed` for a malformed cursor."""
+    """Decodes a cursor into the id it points after."""
     return _decode(cursor, UUID) if cursor else None
 
 
 def decode_int_cursor(cursor: str | None) -> int | None:
-    """The integer id a cursor points after (embedding spaces); 422 when malformed."""
     return _decode(cursor, _positive_int) if cursor else None
 
 
@@ -61,7 +55,6 @@ def _positive_int(text: str) -> int:
 
 
 def next_cursor(ids: Sequence[UUID | int], limit: int) -> str | None:
-    """A cursor when the page is full (`ids` holds at most `limit + 1` ids)."""
     if len(ids) <= limit:
         return None
     return encode_cursor(ids[limit - 1])

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for prompt template loading and rendering."""
 
 from __future__ import annotations
 

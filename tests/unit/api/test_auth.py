@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Bearer authentication of tenant and admin routes."""
 
 from __future__ import annotations
 
@@ -18,7 +17,6 @@ ANY_ID = "00000000-0000-0000-0000-00000000abcd"
 
 
 def _tenant_routes() -> list[tuple[str, str]]:
-    """(method, path with placeholder ids) of every tenant route in the route table."""
     out = []
     for path, item in build_app(None).openapi()["paths"].items():
         if not path.startswith(("/v1/collections", "/v1/jobs")):
@@ -59,7 +57,6 @@ def _assert_unauthenticated(response: object) -> None:
 
 @pytest.mark.parametrize(("method", "path"), TENANT_ROUTES)
 async def test_tenant_route_without_key_is_401(rig: ApiRig, method: str, path: str) -> None:
-    # An invalid body must not change the answer: authentication comes first.
     response = await rig.client.request(method, path, content=b"{not json")
     _assert_unauthenticated(response)
     assert rig.keys.calls == []

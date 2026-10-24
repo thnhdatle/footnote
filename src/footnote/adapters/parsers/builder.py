@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared element assembly: heading paths, ordering and Markdown tables."""
+"""Element assembly with heading paths for the parsers."""
 
 from __future__ import annotations
 
@@ -12,12 +12,10 @@ _MONOSPACE = re.compile(r"courier|consolas|mono|menlo|lucida console|source code
 
 
 def is_monospace_font(name: str | None) -> bool:
-    """True for font names of common fixed-width families."""
     return bool(name) and _MONOSPACE.search(name or "") is not None
 
 
 def table_markdown(rows: Sequence[Sequence[str]]) -> str:
-    """Markdown table text: header row, `|---|` separator, body rows."""
     head = "| " + " | ".join(rows[0]) + " |"
     sep = "|" + "|".join("---" for _ in rows[0]) + "|"
     body = ["| " + " | ".join(r) + " |" for r in rows[1:]]
@@ -25,15 +23,11 @@ def table_markdown(rows: Sequence[Sequence[str]]) -> str:
 
 
 def squash(text: str) -> str:
-    """Collapse every whitespace run to a single space and trim."""
     return " ".join(text.split())
 
 
 class ElementBuilder:
-    """Collects elements, numbering them and tracking the heading path.
-
-    A heading's own `heading_path` includes the heading itself.
-    """
+    """Collects parsed elements and tracks the heading path."""
 
     def __init__(self) -> None:
         self._elements: list[Element] = []
@@ -48,7 +42,6 @@ class ElementBuilder:
         page: int | None = None,
         page_to: int | None = None,
     ) -> None:
-        """Append an element; blank text is dropped."""
         if not text.strip():
             return
         if kind is ElementKind.HEADING:
@@ -69,5 +62,4 @@ class ElementBuilder:
         )
 
     def build(self) -> list[Element]:
-        """Return the collected elements."""
         return list(self._elements)

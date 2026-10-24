@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""PgSearchStore: lexical modes, vector legs, filters, display data, snapshot isolation."""
 
 from __future__ import annotations
 
@@ -35,20 +34,18 @@ def _q(text: str, match: LexicalMatch, rank: LexicalRank = LexicalRank.TS_RANK) 
 
 @pytest_asyncio.fixture
 async def w(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """A tenant whose collection holds TEXTS (one document, pages 1..3)."""
     yield await seed(admin_db, app_db, f"search-{uuid.uuid4().hex[:8]}", TEXTS)
 
 
 @pytest.fixture(params=[True, False], ids=["predicates", "rls-only"])
 def store(request: pytest.FixtureRequest, app_pool: Pool) -> PgSearchStore:
-    """Store with and without the app-side tenant predicates."""
     return PgSearchStore(Database(app_pool, app_tenant_predicates=bool(request.param)))
 
 
 async def test_collection_view(store: PgSearchStore, w: World) -> None:
     async with store.snapshot(w.tenant, w.collection.id) as snap:
         view = await snap.collection()
-        assert view is await snap.collection()  # read once per snapshot
+        assert view is await snap.collection()
     assert (view.id, view.chunk_count, view.active_space) == (w.collection.id, 3, w.space)
     assert view.settings == w.collection.settings
 
@@ -150,7 +147,6 @@ async def test_only_current_versions_and_snapshot_isolation(
     sleeping = _q("sleeps", LexicalMatch.ANY)
     async with store.snapshot(w.tenant, w.collection.id) as snap:
         assert len(await snap.lexical(sleeping, SearchFilters())) == 1
-        # A version swap commits while the snapshot is open: the snapshot keeps the old view.
         await index_version(
             app_db,
             w.collection,
@@ -161,7 +157,7 @@ async def test_only_current_versions_and_snapshot_isolation(
         assert len(await snap.lexical(sleeping, SearchFilters())) == 1
         assert (await snap.collection()).chunk_count == 3
     async with store.snapshot(w.tenant, w.collection.id) as snap:
-        assert await snap.lexical(sleeping, SearchFilters()) == []  # old chunk not yet GC'd
+        assert await snap.lexical(sleeping, SearchFilters()) == []
         vec = VectorQuery(l2_normalise(hash_vector(TEXTS[1])), 50, exact=True)
         assert w.chunk_ids[1] not in {h.chunk_id for h in await snap.vector(vec, SearchFilters())}
         assert (await snap.collection()).chunk_count == 2
@@ -205,7 +201,7 @@ async def test_search_service_end_to_end(app_pool: Pool, w: World) -> None:
         FakeEmbedderFactory(),
         None,
         FakeClock(),
-        SearchConfig(exact_scan_max=0),  # force the HNSW path
+        SearchConfig(exact_scan_max=0),
     )
     result = await service.search(
         w.tenant,

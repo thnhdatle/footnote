@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for embedding spaces, index rules and vector helpers."""
 
 from __future__ import annotations
 

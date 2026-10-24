@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# make security: pip-audit over the locked runtime
-# dependencies, the pip-licenses --allow-only gate, and trivy on the local image.
-# Usage: scripts/security.sh   (IMAGE=thnhdatle/footnote:dev overrides the image name)
+# Runs pip-audit, the license gate and trivy on the local image.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 IMAGE="${IMAGE:-thnhdatle/footnote:dev}"
 EXCEPTIONS="licenses/exceptions.yaml"
 
-# Project license allow-list, plus the classifier spellings of the same licenses that
-# pip-licenses reports for packages without an SPDX expression.
 ALLOWED="Apache-2.0;MIT;MIT-CMU;BSD-2-Clause;BSD-3-Clause;ISC;MPL-2.0;0BSD;Zlib;PSF-2.0;Unlicense;CC0-1.0"
 ALLOWED+=";MIT License;BSD License;Apache Software License;ISC License (ISCL)"
 ALLOWED+=";Mozilla Public License 2.0 (MPL 2.0);Python Software Foundation License"
@@ -26,8 +22,6 @@ echo "== licenses: pip-licenses --allow-only (exceptions in ${EXCEPTIONS})"
 packages="$(runtime_requirements | grep -v '^ *#' | sed 's/[ =;].*//' | tr '\n' ' ')"
 # shellcheck disable=SC2086 # the package list is intentionally word-split
 inventory="$(uv run --frozen pip-licenses --from=mixed --format=json --packages ${packages})"
-# Verify the exceptions file against the installed versions and licenses; print the
-# exempt package names (one per line) for --ignore-packages.
 inv_file="$(mktemp)"
 trap 'rm -f "${inv_file}"' EXIT
 printf '%s' "${inventory}" >"${inv_file}"

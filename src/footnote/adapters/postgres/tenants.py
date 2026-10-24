@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tenants and API keys.
-
-`PgTenantAdmin` runs over the admin pool (footnote_admin, `admin_all` policies);
-footnote_app has no privileges on `tenants` and `api_keys` and resolves keys only
-through the SECURITY DEFINER function `footnote.footnote_resolve_key`.
-"""
+"""Tenants and API keys."""
 
 from __future__ import annotations
 
@@ -48,13 +43,11 @@ _SHOWN_PREFIX_CHARS = 8
 
 
 def generate_api_key() -> str:
-    """`fn_` + base32 of 32 random bytes (lowercase, unpadded)."""
     raw = base64.b32encode(secrets.token_bytes(_KEY_BYTES)).decode().rstrip("=").lower()
     return KEY_PREFIX + raw
 
 
 def hash_api_key(key: str) -> bytes:
-    """SHA-256 of the key as stored in `api_keys.key_hash`."""
     return hashlib.sha256(key.encode()).digest()
 
 
@@ -81,14 +74,14 @@ def _key(row: dict[str, Any]) -> ApiKeyRecord:
 
 
 class PgTenantAdmin:
-    """Tenant and key administration over the admin pool."""
+    """Administers tenants and API keys."""
 
     def __init__(self, admin: Database, id_factory: IdFactory = new_id) -> None:
         self._db = admin
         self._new_id = id_factory
 
     async def create_tenant(self, name: str, quotas: Quotas) -> Tenant:
-        """Insert a tenant."""
+        """Inserts a tenant."""
         quotas.validate()
         async with self._db.global_tx() as conn:
             row = await fetch_one(
@@ -100,7 +93,6 @@ class PgTenantAdmin:
         return _tenant(require(row, "tenant not created"))
 
     async def get_tenant(self, tenant: TenantId) -> Tenant:
-        """One tenant; NotFoundError when absent."""
         async with self._db.global_tx() as conn:
             row = await fetch_one(
                 conn,
@@ -110,7 +102,6 @@ class PgTenantAdmin:
         return _tenant(require(row, "tenant not found"))
 
     async def list_tenants(self, after: TenantId | None, limit: int) -> list[Tenant]:
-        """Tenants ordered by id (keyset pagination)."""
         async with self._db.global_tx() as conn:
             rows = await fetch_all(
                 conn,
@@ -123,7 +114,6 @@ class PgTenantAdmin:
     async def update_tenant(
         self, tenant: TenantId, *, name: str | None = None, quotas: Quotas | None = None
     ) -> Tenant:
-        """Change the name and/or quotas."""
         if quotas is not None:
             quotas.validate()
         async with self._db.global_tx() as conn:
@@ -141,7 +131,6 @@ class PgTenantAdmin:
         return _tenant(require(row, "tenant not found"))
 
     async def mark_deleting(self, tenant: TenantId, jobs: Sequence[NewJob] = ()) -> list[JobId]:
-        """Set status `deleting`, revoke every key and enqueue `jobs` (`tenant_delete`), one tx."""
         async with self._db.global_tx() as conn:
             updated = await execute(
                 conn,
@@ -164,17 +153,13 @@ class PgTenantAdmin:
             return ids
 
     async def delete_tenant_data(self, tenant: TenantId) -> None:
-        """Remove every row of the tenant (the `tenant_delete` job)."""
         async with self._db.global_tx() as conn:
             await execute(
                 conn, "DELETE FROM footnote.jobs WHERE tenant_id = %(id)s", {"id": tenant}
             )
-            # Cascades: collections → documents → versions/blobs/memberships/chunks/vectors,
-            # webhook deliveries; api_keys and tenant_usage.
             await execute(conn, "DELETE FROM footnote.tenants WHERE id = %(id)s", {"id": tenant})
 
     async def usage(self, tenant: TenantId) -> TenantUsage:
-        """Counts and stored bytes (originals + elements) of a tenant."""
         async with self._db.global_tx() as conn:
             row = await fetch_one(
                 conn,
@@ -199,7 +184,7 @@ class PgTenantAdmin:
     async def create_key(
         self, tenant: TenantId, name: str, expires_at: datetime | None = None
     ) -> IssuedKey:
-        """Issue a key; the plaintext is returned once."""
+        """Issues an API key."""
         key = generate_api_key()
         async with self._db.global_tx() as conn:
             row = await self._insert_key(conn, tenant, name, key, expires_at)
@@ -229,7 +214,6 @@ class PgTenantAdmin:
     async def list_keys(
         self, tenant: TenantId, after: UUID | None, limit: int
     ) -> list[ApiKeyRecord]:
-        """Keys of a tenant (no secrets) ordered by id after `after` (keyset pagination)."""
         async with self._db.global_tx() as conn:
             rows = await fetch_all(
                 conn,
@@ -242,7 +226,6 @@ class PgTenantAdmin:
         return [_key(r) for r in rows]
 
     async def revoke_key(self, tenant: TenantId, key_id: UUID) -> None:
-        """Revoke a key of this tenant (idempotent)."""
         async with self._db.global_tx() as conn:
             updated = await execute(
                 conn,
@@ -253,7 +236,6 @@ class PgTenantAdmin:
         require(updated or None, "key not found")
 
     async def rotate_key(self, tenant: TenantId, key_id: UUID, grace: timedelta) -> IssuedKey:
-        """Issue a replacement; the old key stays valid for `grace` (then expires)."""
         key = generate_api_key()
         async with self._db.global_tx() as conn:
             old = await fetch_one(
@@ -270,13 +252,12 @@ class PgTenantAdmin:
 
 
 class PgKeyResolver:
-    """Resolves tenant API keys as footnote_app via `footnote_resolve_key`."""
+    """Resolves API keys to tenants."""
 
     def __init__(self, app: Database) -> None:
         self._db = app
 
     async def resolve(self, key: str) -> tuple[TenantId, UUID]:
-        """(tenant id, key id); UnauthenticatedError for unknown, revoked or expired keys."""
         if not key.startswith(KEY_PREFIX):
             raise UnauthenticatedError("invalid api key")
         async with self._db.global_tx() as conn:

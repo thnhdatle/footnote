@@ -1,10 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Integration fixtures: one pgvector container per session, bootstrapped and migrated.
-
-The container runs `deploy/sql/bootstrap.sql` as the superuser (roles, schema,
-extension) and `alembic upgrade head` as footnote_admin, exactly like a deployment.
-`FOOTNOTE_TEST_PG_IMAGE` selects another image (nightly runs pg15).
-"""
 
 from __future__ import annotations
 
@@ -31,8 +25,6 @@ APP_PASSWORD = "app-pw"
 
 @dataclass(frozen=True)
 class PgInfo:
-    """DSNs of the migrated test database."""
-
     superuser: str
     admin: str
     app: str
@@ -46,7 +38,6 @@ def _dsn(container: PostgresContainer, user: str, password: str) -> str:
 
 
 def migrate(admin_dsn: str) -> None:
-    """`alembic upgrade head` as footnote_admin."""
     cfg = Config(str(ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(ROOT / "migrations"))
     cfg.set_main_option("path_separator", "os")
@@ -57,7 +48,6 @@ def migrate(admin_dsn: str) -> None:
 
 @pytest.fixture(scope="session")
 def pg() -> Iterator[PgInfo]:
-    """Bootstrapped and migrated Postgres + pgvector."""
     container = PostgresContainer(
         IMAGE, username="postgres", password="postgres", dbname="footnote", driver=None
     )
@@ -102,7 +92,6 @@ def pg() -> Iterator[PgInfo]:
 
 
 def _start(container: PostgresContainer, attempts: int = 3) -> None:
-    """Start the container; retry the Ryuk reaper's port-mapping race on Docker Desktop."""
     for attempt in range(1, attempts + 1):
         try:
             container.start()
@@ -119,7 +108,6 @@ async def _pool(dsn: str) -> Pool:
 
 @pytest_asyncio.fixture
 async def app_pool(pg: PgInfo) -> AsyncIterator[Pool]:
-    """Pool connected as footnote_app."""
     pool = await _pool(pg.app)
     yield pool
     await pool.close()
@@ -127,7 +115,6 @@ async def app_pool(pg: PgInfo) -> AsyncIterator[Pool]:
 
 @pytest_asyncio.fixture
 async def admin_pool(pg: PgInfo) -> AsyncIterator[Pool]:
-    """Pool connected as footnote_admin."""
     pool = await _pool(pg.admin)
     yield pool
     await pool.close()
@@ -135,32 +122,24 @@ async def admin_pool(pg: PgInfo) -> AsyncIterator[Pool]:
 
 @pytest.fixture
 def app_db(app_pool: Pool) -> Database:
-    """App database with defence-in-depth predicates on."""
     return Database(app_pool)
 
 
 @pytest.fixture
 def admin_db(admin_pool: Pool) -> Database:
-    """Admin database (no tenant setting; admin_all policies)."""
     return Database(admin_pool)
 
 
 @pytest.fixture(autouse=True)
 def _clean_tenants_and_spaces(request: pytest.FixtureRequest) -> Iterator[None]:
-    """Remove tenants and extra spaces a test created (the product cap of 8 spaces stays).
-
-    Tests register uniquely named spaces and tenants in the session-scoped database; without
-    this the space cap is reached for tests that register under the default limit.
-    """
     yield
     if "pg" not in request.fixturenames or "filler" in request.fixturenames:
-        return  # the scale module cleans up its own module-scoped data
+        return
     pg: PgInfo = request.getfixturevalue("pg")
     drop_extra_data(pg)
 
 
 def drop_extra_data(pg: PgInfo) -> None:
-    """Delete all tenants (cascading) and every space except the session's base space."""
     with psycopg.connect(pg.admin, autocommit=True) as conn:
         conn.execute("DELETE FROM footnote.jobs")
         conn.execute("DELETE FROM footnote.tenants")

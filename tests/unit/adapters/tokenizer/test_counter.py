@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""HfTokenCounter counts tokens without special tokens."""
 
 from pathlib import Path
 

@@ -1,11 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""End to end against Postgres: upload → worker → parse (sandbox) → chunk → embed → swap,
-incremental re-upload, then a re-embed with the atomic switch while searches run.
-
-Real: Postgres + pgvector (testcontainers), every Postgres adapter, the sandboxed parser
-on a generated parser fixture, the queue worker. Fake: the embedder (deterministic
-per-space vectors that count every text) and a whitespace token counter.
-"""
 
 from __future__ import annotations
 
@@ -64,8 +57,6 @@ CHUNKING = ChunkingSettings(
 
 
 class Clock:
-    """Wall clock (the worker drives real time anyway)."""
-
     def now(self) -> float:
         return 1_760_000_000.0
 
@@ -74,8 +65,6 @@ class Clock:
 
 
 class Words:
-    """Whitespace token counter."""
-
     def count(self, text: str) -> int:
         return len(text.split())
 
@@ -87,8 +76,6 @@ class Tokenizers:
 
 @dataclass
 class CountingEmbedders:
-    """Deterministic per-space vectors; records (space id, text) of every embedded text."""
-
     texts: list[tuple[int, str]] = field(default_factory=list)
 
     def for_space(self, space: EmbeddingSpace) -> Embedder:
@@ -101,7 +88,7 @@ class _SpaceEmbedder:
         self._owner = owner
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        await asyncio.sleep(0)  # yield so concurrent searches interleave with batches
+        await asyncio.sleep(0)
         self._owner.texts.extend((self._space.id, t) for t in texts)
         return [hash_vector(f"{self._space.name}:{t}", self._space.dimensions) for t in texts]
 
@@ -225,7 +212,6 @@ async def flow(app_db: Database, admin_db: Database) -> AsyncIterator[Flow]:
 
 
 async def _until_done(flow: Flow, job_id: Any) -> JobRecord:
-    """Run the worker until `job_id` finishes (other due jobs run too)."""
     stop = asyncio.Event()
     task = asyncio.create_task(flow.worker.run(stop))
     try:
@@ -262,7 +248,6 @@ async def test_ingest_incremental_and_reembed_with_switch(
     md2 = await _incremental_markdown(flow, app_db, tmp_path)
     reembed_job = await _reembed_while_searching(flow)
     await _assert_switched(flow, app_db, reembed_job)
-    # After the switch, ingestion writes only the new active space.
     embedded_before = len(flow.embedders.texts)
     md3 = md2 + b"\n\nOne more paragraph after the switch.\n"
     up3 = await flow.documents.upload(flow.tenant, flow.upload(md3, "simple.md"))
@@ -296,7 +281,6 @@ async def _ingest_pdf(flow: Flow, app_db: Database, tmp_path: Path) -> bytes:
 
 
 async def _identical_reupload(flow: Flow, pdf: bytes) -> None:
-    # Identical re-upload: no version, no job, nothing embedded.
     embedded_before = len(flow.embedders.texts)
     same = await flow.documents.upload(flow.tenant, flow.upload(pdf, "long.pdf"))
     assert same.unchanged
@@ -305,7 +289,6 @@ async def _identical_reupload(flow: Flow, pdf: bytes) -> None:
 
 
 async def _incremental_markdown(flow: Flow, app_db: Database, tmp_path: Path) -> bytes:
-    # A second document in Markdown whose second version changes one section.
     md = _fixture(tmp_path / "md", "simple.md")
     up1 = await flow.documents.upload(flow.tenant, flow.upload(md, "simple.md"))
     assert (await _until_done(flow, up1.job_id)).status == "done"
@@ -324,8 +307,6 @@ async def _incremental_markdown(flow: Flow, app_db: Database, tmp_path: Path) ->
 
 
 async def _reembed_while_searching(flow: Flow) -> Any:
-    # Re-embed into space B while searches run: every search succeeds, reads one space,
-    # and the space flips from A to B exactly once.
     reembed_job = await flow.reembed.change_space(flow.tenant, flow.collection.id, SPACE_B)
     assert reembed_job is not None
     seen: list[int] = []
@@ -345,7 +326,7 @@ async def _reembed_while_searching(flow: Flow) -> Any:
     searcher = asyncio.create_task(searching())
     try:
         record = await _until_done(flow, reembed_job)
-        async with asyncio.timeout(20):  # poll until a search ran after the switch
+        async with asyncio.timeout(20):
             while not seen or seen[-1] != flow.space_b.id:
                 await asyncio.sleep(0.01)
     finally:
@@ -353,7 +334,7 @@ async def _reembed_while_searching(flow: Flow) -> Any:
         await searcher
     assert (record.status, record.last_error) == ("done", None)
     assert seen
-    assert seen[0] == flow.space_a.id  # searches ran before the switch
+    assert seen[0] == flow.space_a.id
     assert seen[-1] == flow.space_b.id
     flips = sum(1 for a, b in itertools.pairwise(seen) if a != b)
     assert flips == 1

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# Installs the pinned CLI tools that `make lint`, `make security` and `make bootstrap` call,
-# on a Linux CI runner. Usage: scripts/ci_install_tools.sh
+# Installs the pinned CLI tools used by the lint, security and bootstrap targets on a CI runner.
 set -euo pipefail
 
 HADOLINT_VERSION=2.15.1

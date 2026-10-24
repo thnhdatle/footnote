@@ -30,27 +30,22 @@ _ZSTD_LEVEL = 3
 
 
 def compress(data: bytes) -> bytes:
-    """zstd-compress stored originals and element lists."""
     return zstandard.ZstdCompressor(level=_ZSTD_LEVEL).compress(data)
 
 
 def decompress(data: bytes) -> bytes:
-    """Inverse of `compress` (frames carry their content size)."""
     return zstandard.ZstdDecompressor().decompress(data)
 
 
 def encode_elements(elements: Sequence[Element]) -> bytes:
-    """Elements as zstd-compressed JSON."""
     return compress(orjson.dumps([e.to_dict() for e in elements]))
 
 
 def decode_elements(data: bytes) -> list[Element]:
-    """Inverse of `encode_elements`."""
     return [Element.from_dict(item) for item in orjson.loads(decompress(data))]
 
 
 def vector_literal(vector: Sequence[float]) -> str:
-    """pgvector text form `[x,y,…]`, cast in SQL to `vector(<d>)`/`halfvec(<d>)`."""
     values = [float(x) for x in vector]
     if not values or not all(math.isfinite(x) for x in values):
         msg = "vector must be non-empty and finite"
@@ -59,7 +54,6 @@ def vector_literal(vector: Sequence[float]) -> str:
 
 
 def settings_to_json(settings: CollectionSettings) -> dict[str, Any]:
-    """Stored part of the settings; `language` and the space live in their own columns."""
     return {
         "chunking": asdict(settings.chunking),
         "retrieval": asdict(settings.retrieval),
@@ -71,7 +65,6 @@ def settings_to_json(settings: CollectionSettings) -> dict[str, Any]:
 def settings_from_json(
     data: Mapping[str, Any], language: str, embedding_space: str
 ) -> CollectionSettings:
-    """Rebuild CollectionSettings; missing keys take the domain defaults."""
     chunking = {**asdict(ChunkingSettings()), **dict(data.get("chunking") or {})}
     retrieval = {**asdict(RetrievalSettings()), **dict(data.get("retrieval") or {})}
     answer = {**asdict(AnswerSettings()), **dict(data.get("answer") or {})}
@@ -118,18 +111,15 @@ def _opt_float(value: Any) -> float | None:
 
 
 def quotas_to_json(quotas: Quotas) -> dict[str, int]:
-    """Quotas as stored in `tenants.quotas`."""
     return asdict(quotas)
 
 
 def quotas_from_json(data: Mapping[str, Any]) -> Quotas:
-    """Inverse of `quotas_to_json`; missing limits are 0 (unlimited)."""
     base = asdict(Quotas())
     return Quotas(**{k: int(data.get(k, v)) for k, v in base.items()})
 
 
 def space_from_row(row: Mapping[str, Any]) -> EmbeddingSpace:
-    """EmbeddingSpace from an `embedding_spaces` row."""
     threshold = row["calibrated_threshold"]
     return EmbeddingSpace(
         id=int(row["id"]),

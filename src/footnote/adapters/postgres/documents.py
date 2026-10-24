@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Documents, versions and stored originals, tenant-scoped by RLS."""
+"""Documents, versions and stored originals."""
 
 from __future__ import annotations
 
@@ -41,7 +41,6 @@ _DOC_NOT_FOUND = "document not found"
 _VERSION_NOT_FOUND = "document version not found"
 
 
-# Document `d` has no version newer than the one bound to `%(ver)s`.
 _NO_NEWER_VERSION = sql.SQL(
     " AND NOT EXISTS (SELECT 1 FROM footnote.document_versions n "
     "JOIN footnote.document_versions v ON v.tenant_id = n.tenant_id AND v.id = %(ver)s "
@@ -104,7 +103,7 @@ def _version(row: dict[str, Any]) -> VersionRecord:
 
 
 class PgDocuments:
-    """Document repository; other tenants' ids behave as absent."""
+    """Stores and reads documents and their versions."""
 
     def __init__(self, db: Database, id_factory: IdFactory = new_id) -> None:
         self._db = db
@@ -114,11 +113,7 @@ class PgDocuments:
         return self._db.tenant_filter(alias)
 
     async def upload(self, tenant: TenantId, up: NewUpload) -> UploadResult:
-        """Create or version a document, store the original and enqueue `ingest` (one tx).
-
-        Same SHA-256, title and chunking settings as the current version → no version,
-        only the metadata is updated (`unchanged`).
-        """
+        """Creates or versions a document and enqueues its ingest job."""
         async with self._db.tenant_tx(tenant) as conn:
             await self._lock_active_collection(conn, tenant, up.collection_id)
             doc_id = DocumentId(self._new_id())
@@ -245,11 +240,7 @@ class PgDocuments:
     async def reversion(
         self, tenant: TenantId, document_id: DocumentId, chunking_hash: str
     ) -> UploadResult | None:
-        """New version from the current one's stored elements (reindex), `ingest` enqueued.
-
-        None when an upload is in flight (latest version processing), the latest version
-        is ready with this `chunking_hash`, or there is no current version / elements.
-        """
+        """Creates a new version from the stored elements of the current one."""
         params = {"tenant": tenant, "id": document_id}
         async with self._db.tenant_tx(tenant) as conn:
             doc = require(
@@ -326,7 +317,6 @@ class PgDocuments:
         )
 
     async def uploaded_bytes_today(self, tenant: TenantId) -> int:
-        """Bytes uploaded today (quota `max_upload_bytes_per_day`)."""
         query = sql.SQL(
             "SELECT COALESCE(sum(u.upload_bytes), 0) AS n FROM footnote.tenant_usage u "
             "WHERE {} AND u.day = current_date"
@@ -336,7 +326,6 @@ class PgDocuments:
         return int(require(row, "usage")["n"])
 
     async def count(self, tenant: TenantId) -> int:
-        """Number of documents (quota `max_documents`)."""
         query = sql.SQL("SELECT count(*) AS n FROM footnote.documents d WHERE {}").format(
             self._tf("d")
         )
@@ -347,7 +336,6 @@ class PgDocuments:
     async def get(
         self, tenant: TenantId, collection_id: CollectionId, document_id: DocumentId
     ) -> DocumentRecord:
-        """One document of an active collection."""
         query = sql.SQL("{} WHERE {} AND d.collection_id = %(cid)s AND d.id = %(id)s").format(
             _DOC_SELECT, self._tf("d")
         )
@@ -360,7 +348,6 @@ class PgDocuments:
     async def find(
         self, tenant: TenantId, collection_id: CollectionId, external_id: str
     ) -> DocumentRecord | None:
-        """The document with `external_id` in an active collection, if any."""
         query = sql.SQL(
             "{} WHERE {} AND d.collection_id = %(cid)s AND d.external_id = %(ext)s"
         ).format(_DOC_SELECT, self._tf("d"))
@@ -377,7 +364,6 @@ class PgDocuments:
         after: DocumentId | None,
         limit: int,
     ) -> list[DocumentRecord]:
-        """Documents of a collection ordered by id (keyset pagination)."""
         query = sql.SQL(
             "{} WHERE {} AND d.collection_id = %(cid)s "
             "AND (%(after)s::uuid IS NULL OR d.id > %(after)s) ORDER BY d.id LIMIT %(limit)s"
@@ -388,7 +374,6 @@ class PgDocuments:
         return [_doc(r) for r in rows]
 
     async def versions(self, tenant: TenantId, document_id: DocumentId) -> list[VersionRecord]:
-        """Every version of a document, oldest first."""
         query = sql.SQL("{} WHERE {} AND v.document_id = %(id)s ORDER BY v.version").format(
             _VERSION_SELECT, self._tf("v")
         )
@@ -397,7 +382,6 @@ class PgDocuments:
         return [_version(r) for r in rows]
 
     async def version(self, tenant: TenantId, version_id: VersionId) -> VersionRecord:
-        """One version by id."""
         query = sql.SQL("{} WHERE {} AND v.id = %(id)s").format(_VERSION_SELECT, self._tf("v"))
         async with self._db.tenant_tx(tenant) as conn:
             row = await fetch_one(conn, query, {"tenant": tenant, "id": version_id})
@@ -412,7 +396,6 @@ class PgDocuments:
         metadata: dict[str, Any] | None = None,
         title: str | None = None,
     ) -> DocumentRecord:
-        """PATCH metadata and/or the display title (the indexed title changes on re-upload)."""
         query = sql.SQL(
             "UPDATE footnote.documents d SET metadata = COALESCE(%(meta)s, d.metadata), "
             "title = COALESCE(%(title)s, d.title), updated_at = now() "
@@ -438,11 +421,6 @@ class PgDocuments:
         *,
         version_id: VersionId | None = None,
     ) -> None:
-        """Set the externally visible status (worker progress, failures).
-
-        With `version_id` the update applies only while no newer version exists (and
-        matching nothing is not an error).
-        """
         guard = _NO_NEWER_VERSION if version_id is not None else sql.SQL("")
         query = sql.SQL(
             "UPDATE footnote.documents d SET status = %(status)s, error = %(error)s, "
@@ -467,7 +445,6 @@ class PgDocuments:
         elements: list[Element],
         pages: int | None = None,
     ) -> None:
-        """Store parsed elements (zstd JSON) so re-chunking never needs the original."""
         query = sql.SQL(
             "UPDATE footnote.document_versions v SET elements = %(el)s, "
             "pages = COALESCE(%(pages)s, v.pages), updated_at = now() WHERE {} AND v.id = %(id)s"
@@ -482,7 +459,6 @@ class PgDocuments:
             require(await execute(conn, query, params) or None, _VERSION_NOT_FOUND)
 
     async def elements(self, tenant: TenantId, version_id: VersionId) -> list[Element]:
-        """Stored elements of a version; NotFoundError when not parsed yet."""
         query = sql.SQL(
             "SELECT v.elements FROM footnote.document_versions v WHERE {} AND v.id = %(id)s"
         ).format(self._tf("v"))
@@ -496,7 +472,6 @@ class PgDocuments:
     async def fail_version(
         self, tenant: TenantId, version_id: VersionId, error: dict[str, Any]
     ) -> None:
-        """Mark a version failed; the document shows the error unless a newer version exists."""
         params = {"tenant": tenant, "id": version_id, "error": jsonb(error)}
         async with self._db.tenant_tx(tenant) as conn:
             row = await fetch_one(
@@ -526,10 +501,6 @@ class PgDocuments:
         document_id: DocumentId,
         version: int | None = None,
     ) -> tuple[str, bytes]:
-        """(media type, original bytes) of the current or a given version.
-
-        NotFoundError `original_not_retained` when the blob was removed.
-        """
         query = sql.SQL(
             "SELECT v.media_type, b.data FROM footnote.documents d "
             "JOIN footnote.collections c ON c.tenant_id = d.tenant_id AND c.id = d.collection_id "
@@ -550,7 +521,6 @@ class PgDocuments:
         return row["media_type"], decompress(bytes(row["data"]))
 
     async def source(self, tenant: TenantId, version_id: VersionId) -> bytes:
-        """Original bytes of a version (worker parse input)."""
         query = sql.SQL(
             "SELECT b.data FROM footnote.document_blobs b WHERE {} AND b.version_id = %(id)s"
         ).format(self._tf("b"))
@@ -561,7 +531,6 @@ class PgDocuments:
         return decompress(bytes(row["data"]))
 
     async def delete_original(self, tenant: TenantId, version_id: VersionId) -> None:
-        """Remove a version's blob (`ingest.retain_originals: false`)."""
         query = sql.SQL(
             "DELETE FROM footnote.document_blobs b WHERE {} AND b.version_id = %(id)s"
         ).format(self._tf("b"))
@@ -571,7 +540,7 @@ class PgDocuments:
     async def delete(
         self, tenant: TenantId, collection_id: CollectionId, document_id: DocumentId
     ) -> None:
-        """Delete a document with its versions, memberships, chunks, vectors and blobs."""
+        """Deletes a document with its versions and chunks."""
         params = {"tenant": tenant, "cid": collection_id, "id": document_id}
         async with self._db.tenant_tx(tenant) as conn:
             row = await fetch_one(
@@ -583,7 +552,6 @@ class PgDocuments:
                 params,
             )
             current = require(row, _DOC_NOT_FOUND)["current_version_id"]
-            # Lock order document → collection, as in the version swap.
             await conn.execute(
                 "UPDATE footnote.collections SET chunk_count = GREATEST(chunk_count - ("
                 "SELECT count(DISTINCT chunk_id) FROM footnote.version_chunks "

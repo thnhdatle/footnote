@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`retrieval.csv` / `ablation.md` writers and the in-process bm25s baseline."""
 
 from __future__ import annotations
 
@@ -71,11 +70,11 @@ CORPUS = {
 
 def test_bm25_ranks_with_stemming_and_stopwords() -> None:
     index = Bm25Index(CORPUS)
-    assert index.search("runner")[0] == "a"  # "runners" stems to "runner"
+    assert index.search("runner")[0] == "a"
     assert index.search("cooked pasta") == ["b"]
-    assert index.search("the and of") == []  # stopwords only
+    assert index.search("the and of") == []
     assert index.search("zebra") == []
-    assert set(index.search("run", k=10)) == {"a", "c"}  # running/run
+    assert set(index.search("run", k=10)) == {"a", "c"}
     assert document_text(CORPUS["c"]) == CORPUS["c"].text
 
 
@@ -87,7 +86,6 @@ def test_bm25_run_times_each_query() -> None:
 
 
 def test_fuse_rankings_weighted_rrf_by_hand() -> None:
-    # scores by hand: x = 1/61 + 0.5/62, y = 1/62, z = 0.5/61 (so x > y > z)
     fused = fuse_rankings([(["x", "y"], 1.0), (["z", "x"], 0.5)], rrf_k=60)
     assert fused == ["x", "y", "z"]
     tie = fuse_rankings([(["p"], 1.0), (["q"], 1.0)], rrf_k=60, tiebreak=["q", "p"])

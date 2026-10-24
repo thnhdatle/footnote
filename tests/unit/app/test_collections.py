@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Collections use-case details not reachable through the HTTP schemas."""
 
 from __future__ import annotations
 

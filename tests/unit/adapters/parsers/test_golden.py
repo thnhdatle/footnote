@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Golden tests: every generated fixture parses to its expected element list."""
 
 from __future__ import annotations
 

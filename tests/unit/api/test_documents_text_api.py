@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Documents API: text and element views, originals and chunk lookup."""
 
 from __future__ import annotations
 

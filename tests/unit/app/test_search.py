@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the search use case, driven through in-memory fakes."""
 
 from __future__ import annotations
 
@@ -140,7 +139,6 @@ async def test_search_rerank_orders_by_logit_and_records_scores() -> None:
 
 async def test_search_rerank_reorders_head_stably() -> None:
     rig = build(rerank=True, k=2, rerank_n=2)
-    # chunk 3 is the nearest vector, chunk 2 the second; the reranker prefers chunk 2.
     rig.collection.chunks[2].vector = l2_normalise(hash_vector("beta"))
     near = hash_vector("beta")
     near[0] += 0.1
@@ -173,7 +171,7 @@ async def test_search_rerank_with_no_candidates_skips_reranker() -> None:
     rig = build(rerank=True)
     result = await rig.search("nomatch", mode=SearchMode.LEXICAL, need_similarity=True)
     assert result.hits == []
-    assert result.reranked  # rerank stage was active, so the rerank gate applies
+    assert result.reranked
     assert result.similarities == {}
     assert rig.reranker is not None
     assert rig.reranker.calls == []

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Local ONNX embedder (manifest model on CPU, batched, CLS or mean pooling)."""
+"""Local ONNX embedder."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ DEFAULT_BATCH_SIZE = 32
 
 
 class OnnxEmbedder:
-    """Implements `ports.Embedder` for one local embedding model."""
+    """Embeds text with a local ONNX model."""
 
     def __init__(  # noqa: PLR0913 - one value per manifest field plus the two engines
         self,
@@ -58,7 +58,7 @@ class OnnxEmbedder:
         batch_size: int = DEFAULT_BATCH_SIZE,
         on_truncated: Callable[[int], None] | None = None,
     ) -> OnnxEmbedder:
-        """Load the model and tokenizer files of a manifest entry from `models_dir`."""
+        """Loads the model and tokenizer files of a manifest entry."""
         model = local_path(models_dir, entry, entry.files["model"])
         tokenizer = local_path(models_dir, entry, entry.files["tokenizer"])
         return cls(
@@ -92,12 +92,12 @@ class OnnxEmbedder:
         return out
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed chunk texts, one L2-normalised vector per input."""
+        """Embeds chunk texts into normalized vectors."""
         if not texts:
             return []
         return await asyncio.to_thread(self._embed_all, list(texts))
 
     async def embed_query(self, text: str) -> list[float]:
-        """Embed a query with the manifest prefix prepended."""
+        """Embeds a query with the manifest prefix."""
         vectors = await asyncio.to_thread(self._embed_all, [self._query_prefix + text])
         return vectors[0]

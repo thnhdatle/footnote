@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the webhook sender: signing, SSRF policy, redirects, limits."""
 
 from __future__ import annotations
 

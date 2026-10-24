@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""DOCX via python-docx: Heading 1..6 styles, list paragraphs, code paragraphs, tables.
-
-python-docx parses XML with entity resolution off, no DTD loading and no network access;
-archive limits are enforced by `limits.check_docx` before and while reading.
-"""
+"""DOCX parser."""
 
 from __future__ import annotations
 
@@ -54,7 +50,7 @@ def _blocks(doc: object) -> Iterator[Paragraph | Table]:
 
 
 def parse_docx(data: bytes) -> list[Element]:
-    """Parse DOCX bytes into elements (`page` is always None)."""
+    """Parses DOCX bytes into elements."""
     doc = Document(io.BytesIO(data))
     builder = ElementBuilder()
     code: list[str] = []

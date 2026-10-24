@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Document, version, element and chunk models."""
+"""Schemas of the document routes."""
 
 from __future__ import annotations
 
@@ -33,7 +33,6 @@ class UploadOut(BaseModel):
 
     @classmethod
     def of(cls, r: UploadResult) -> UploadOut:
-        """Build from the app-layer result."""
         return cls(
             document_id=r.document_id, unchanged=r.unchanged, version=r.version, job_id=r.job_id
         )
@@ -62,7 +61,6 @@ class VersionOut(BaseModel):
 
     @classmethod
     def of(cls, v: VersionRecord) -> VersionOut:
-        """Build from the domain record."""
         return cls(
             version=v.version,
             status=v.status,
@@ -101,7 +99,6 @@ class DocumentOut(BaseModel):
 
     @classmethod
     def of(cls, d: DocumentRecord) -> DocumentOut:
-        """Build from the domain record."""
         return cls(
             id=d.id,
             collection_id=d.collection_id,
@@ -124,7 +121,6 @@ class DocumentDetailOut(DocumentOut):
 
     @classmethod
     def of_info(cls, info: DocumentInfo) -> DocumentDetailOut:
-        """Build from the app-layer view."""
         return cls(
             **DocumentOut.of(info.record).model_dump(),
             chunk_count=info.chunk_count,
@@ -153,7 +149,6 @@ class ElementOut(BaseModel):
 
     @classmethod
     def of(cls, e: Element) -> ElementOut:
-        """Build from the domain element."""
         return cls(
             kind=e.kind,
             text=e.text,
@@ -194,7 +189,6 @@ class ChunkOut(BaseModel):
 
     @classmethod
     def of(cls, c: ChunkDetail) -> ChunkOut:
-        """Build from the domain record."""
         return cls(
             id=c.id,
             collection_id=c.collection_id,

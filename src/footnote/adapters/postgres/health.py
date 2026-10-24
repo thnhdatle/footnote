@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Readiness queries and the queue-depth gauge source.
-
-`/readyz` needs: both pools answering, the schema at the migration head, PostgreSQL
->= 15, pgvector `extversion` >= 0.8.0 and the tenancy role checks (`roles.py`). Queue depth
-is read over the admin pool, whose `admin_all` policies see every tenant's jobs.
-"""
+"""Readiness queries and the queue depth gauge source."""
 
 from __future__ import annotations
 
@@ -32,14 +27,12 @@ def _version_tuple(text: str) -> tuple[int, ...]:
 
 
 async def ping(db: Database) -> list[str]:
-    """An empty list when the pool hands out a working connection."""
     async with db.global_tx() as conn:
         await conn.execute("SELECT 1")
     return []
 
 
 async def version_problems(db: Database) -> list[str]:
-    """PostgreSQL and pgvector version requirements."""
     async with db.global_tx() as conn:
         row = await fetch_one(conn, _VERSIONS)
     if row is None:  # pragma: no cover - a SELECT without FROM always returns a row
@@ -56,7 +49,6 @@ async def version_problems(db: Database) -> list[str]:
 
 
 async def migration_problems(db: Database, head: str | None) -> list[str]:
-    """Problems unless `footnote.alembic_version` holds exactly `head`."""
     if head is None:
         return ["migration scripts not found; cannot compare the schema revision"]
     async with db.global_tx() as conn:
@@ -69,7 +61,6 @@ async def migration_problems(db: Database, head: str | None) -> list[str]:
 
 
 async def queue_depth(admin: Database) -> dict[str, int]:
-    """Queued jobs per kind across tenants (admin pool)."""
     async with admin.global_tx() as conn:
         rows = await fetch_all(conn, _QUEUE_DEPTH)
     return {str(r["kind"]): int(r["n"]) for r in rows}

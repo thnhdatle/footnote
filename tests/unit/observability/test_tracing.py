@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tracing setup behind environment configuration."""
 
 from __future__ import annotations
 

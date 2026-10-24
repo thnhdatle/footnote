@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Duration and size parsing shared by configuration.
-
-Durations are Go-style strings with a `d` suffix (`"30s"`, `"1h30m"`, `"14d"`) and are
-returned as seconds. Sizes are bytes with an optional suffix (`"64MiB"`, `"1.5GB"`).
-"""
+"""Parsers for duration and size values."""
 
 from __future__ import annotations
 
@@ -25,7 +21,6 @@ _SIZE_FACTOR = {
 
 
 def parse_duration(value: object) -> float:
-    """Seconds for a duration string; plain numbers are taken as seconds."""
     if isinstance(value, bool):
         raise ValueError("not a duration")
     if isinstance(value, int | float):
@@ -45,7 +40,6 @@ def parse_duration(value: object) -> float:
 
 
 def parse_size(value: object) -> int:
-    """Bytes for a size string; plain integers are bytes."""
     if isinstance(value, bool):
         raise ValueError("not a size")
     if isinstance(value, int):

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""SystemHostResolver: the HostResolver adapter used when a webhook URL is set."""
 
 from __future__ import annotations
 

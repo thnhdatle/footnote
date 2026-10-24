@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for tenants and quotas."""
 
 from __future__ import annotations
 

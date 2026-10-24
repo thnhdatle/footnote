@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Operations and middleware: health, readiness, version, admin listener, request ids,
-error envelopes, body limits, 500 recovery and the access log."""
 
 from __future__ import annotations
 
@@ -42,9 +40,6 @@ async def serve(deps: ApiDeps) -> AsyncIterator[tuple[FastAPI, httpx.AsyncClient
 
 def log_lines(rig: ApiRig) -> list[dict[str, Any]]:
     return [json.loads(line) for line in rig.log.getvalue().splitlines() if line.strip()]
-
-
-# -- health, readiness, version ----------------------------------------------
 
 
 async def test_healthz_is_ok(rig: ApiRig) -> None:
@@ -124,9 +119,6 @@ async def test_version_reports_build_information(rig: ApiRig) -> None:
     assert re.fullmatch(r"3\.\d+\.\d+", body["python_version"])
 
 
-# -- admin listener ----------------------------------------------------------
-
-
 @pytest.mark.parametrize("path", ["/healthz", "/readyz"])
 async def test_admin_listener_serves_health(rig: ApiRig, path: str) -> None:
     r = await rig.admin_client.get(path)
@@ -158,9 +150,6 @@ async def test_data_plane_does_not_serve_metrics(rig: ApiRig) -> None:
     assert (await rig.client.get("/metrics")).status_code == 404
 
 
-# -- request ids -------------------------------------------------------------
-
-
 @pytest.mark.parametrize("request_id", ["abc-123_X.y", "a" * 128, "01HZXK9Q3M5N7P8R2S4T6V8W0X"])
 async def test_valid_request_id_is_echoed(rig: ApiRig, request_id: str) -> None:
     r = await rig.client.get("/healthz", headers={"X-Request-Id": request_id})
@@ -182,9 +171,6 @@ async def test_missing_request_id_is_generated_per_request(rig: ApiRig) -> None:
     second = await rig.client.get("/healthz")
     assert ULID.match(first.headers["x-request-id"])
     assert first.headers["x-request-id"] != second.headers["x-request-id"]
-
-
-# -- error envelopes ---------------------------------------------------------
 
 
 async def test_unknown_route_is_a_not_found_envelope(rig: ApiRig) -> None:
@@ -224,9 +210,6 @@ async def test_validation_errors_name_the_invalid_fields(rig: ApiRig) -> None:
     assert err["details"][0]["field"] == "name"
 
 
-# -- body limit --------------------------------------------------------------
-
-
 async def test_declared_json_body_over_the_limit_is_rejected() -> None:
     async with custom_rig(max_json_bytes=100) as rig:
         r = await rig.client.post("/v1/collections", headers=rig.auth(), json={"name": "x" * 200})
@@ -260,9 +243,6 @@ async def test_json_body_at_the_limit_is_accepted() -> None:
             content=body,
         )
         assert r.status_code == 201
-
-
-# -- recovery ----------------------------------------------------------------
 
 
 async def test_handler_exception_is_a_generic_500(
@@ -313,9 +293,6 @@ async def test_failed_requests_are_counted_with_status_500(
         and 'status="500"' in line
         for line in text.splitlines()
     )
-
-
-# -- access log --------------------------------------------------------------
 
 
 async def test_access_log_writes_one_line_per_request() -> None:

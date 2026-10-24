@@ -1,13 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""HTTP error envelope and the mapping from domain errors to statuses.
-
-Every error response has the body
-`{"error": {"code": "<snake_case>", "message": "…", "request_id": "…"}}`; validation
-errors add `"details": [{"field": "…", "message": "…"}]`. Codes are the `code` of the
-domain error (registered in `docs/guides/errors.md`); the status comes from the code when
-it is listed in `CODE_STATUS`, else from the error class. Unknown exceptions become
-500 `internal` without leaking their text.
-"""
+"""HTTP error envelope and the mapping from domain errors to statuses."""
 
 from __future__ import annotations
 
@@ -35,7 +27,6 @@ from footnote.domain.errors import (
 INTERNAL: Final = "internal"
 VALIDATION_FAILED: Final = "validation_failed"
 
-# Codes whose status differs from their class default (or whose class is generic).
 CODE_STATUS: Final[Mapping[str, int]] = {
     "unsupported_media_type": 415,
     "file_too_large": 413,
@@ -75,7 +66,6 @@ _HTTP_CODES: Final[Mapping[int, str]] = {
 
 
 def status_for(error: DomainError) -> int:
-    """HTTP status of a domain error."""
     if error.code in CODE_STATUS:
         return CODE_STATUS[error.code]
     for cls, status in CLASS_STATUS:
@@ -85,7 +75,6 @@ def status_for(error: DomainError) -> int:
 
 
 def request_id_of(request: Request) -> str:
-    """The request id set by the request-context middleware ("" outside it)."""
     return str(getattr(request.state, "request_id", ""))
 
 
@@ -95,7 +84,6 @@ def envelope(
     request_id: str,
     details: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """The `{"error": {…}}` body."""
     body: dict[str, Any] = {"code": code, "message": message, "request_id": request_id}
     if details:
         body["details"] = details
@@ -111,7 +99,6 @@ def error_response(  # noqa: PLR0913 - envelope fields plus keyword-only extras
     details: list[dict[str, Any]] | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> Response:
-    """A JSON error response with the envelope."""
     all_headers = dict(headers or {})
     if status == 401:  # noqa: PLR2004 - RFC 6750 challenge on every 401
         all_headers.setdefault("WWW-Authenticate", 'Bearer realm="footnote"')
@@ -124,7 +111,6 @@ def error_response(  # noqa: PLR0913 - envelope fields plus keyword-only extras
 
 
 def domain_error_response(error: DomainError, request_id: str) -> Response:
-    """Envelope for a domain error (field details for validation errors)."""
     status = status_for(error)
     if status >= 500 and status not in (502, 503):  # noqa: PLR2004
         return error_response(500, INTERNAL, "internal error", request_id)
@@ -159,7 +145,7 @@ async def _on_validation_error(request: Request, exc: Exception) -> Response:
 
 async def _on_http_error(request: Request, exc: Exception) -> Response:
     assert isinstance(exc, StarletteHTTPException)  # noqa: S101
-    if isinstance(exc.__cause__, DomainError):  # e.g. a body cut off while FastAPI read it
+    if isinstance(exc.__cause__, DomainError):
         return domain_error_response(exc.__cause__, request_id_of(request))
     code = _HTTP_CODES.get(exc.status_code, "http_error")
     message = str(exc.detail) if exc.detail else code.replace("_", " ")
@@ -169,7 +155,7 @@ async def _on_http_error(request: Request, exc: Exception) -> Response:
 
 
 def install_error_handlers(app: FastAPI) -> None:
-    """Register the envelope for domain, validation and routing errors."""
+    """Registers the error envelope for domain, validation and routing errors."""
     app.add_exception_handler(DomainError, _on_domain_error)
     app.add_exception_handler(RequestValidationError, _on_validation_error)
     app.add_exception_handler(StarletteHTTPException, _on_http_error)

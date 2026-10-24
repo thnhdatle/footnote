@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Hypothesis: citation verifier and webhook signature decoders on arbitrary input."""
 
 from __future__ import annotations
 

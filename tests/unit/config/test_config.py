@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Loading, env overrides, secrets and validation of the configuration."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Webhook delivery log records and the event payload."""
+"""Webhook delivery records and the event payload."""
 
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ type DeliveryStatus = Literal["pending", "delivered", "failed"]
 
 @dataclass(frozen=True, slots=True)
 class DeliveryRecord:
-    """A delivery as listed by `GET /v1/collections/{id}/webhook-deliveries`."""
-
     id: UUID
     collection_id: CollectionId
     event: str
@@ -33,8 +31,6 @@ class DeliveryRecord:
 
 @dataclass(frozen=True, slots=True)
 class AttemptRecord:
-    """The outcome of one delivery attempt."""
-
     delivery_id: UUID
     collection_id: CollectionId
     event: str
@@ -46,8 +42,6 @@ class AttemptRecord:
 
 @dataclass(frozen=True, slots=True)
 class DocumentEvent:
-    """One `document.ready` / `document.failed` occurrence."""
-
     event: WebhookEvent
     collection_id: CollectionId
     document_id: DocumentId
@@ -57,7 +51,6 @@ class DocumentEvent:
     occurred_at: float
 
     def payload(self) -> dict[str, Any]:
-        """The webhook JSON body (`occurred_at` as ISO 8601 UTC)."""
         return {
             "event": self.event.value,
             "collection_id": str(self.collection_id),

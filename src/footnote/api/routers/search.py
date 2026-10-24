@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`POST /v1/collections/{id}/search` and `/answers` (JSON or SSE).
-
-Streaming answers are Server-Sent Events: `retrieval` (hits), `delta` (raw text),
-`citations` (verified citations and the cleaned answer), `done` (usage and flags) or
-`error`. The first event is produced before the response starts, so validation, 404,
-`llm_not_configured` and `evidence_threshold_uncalibrated` are ordinary error responses.
-"""
+"""Search and answer routes."""
 
 from __future__ import annotations
 
@@ -52,7 +46,6 @@ def _trace_id() -> str | None:
 
 
 def observe_search(metrics: Metrics, result: SearchResult) -> None:
-    """`footnote_search_duration_seconds{stage}` and the exact-scan counter."""
     for stage, seconds in result.stage_seconds.items():
         metrics.search_duration.labels(stage).observe(seconds)
     if result.exact_scan_reason in ("small_collection", "fallback"):
@@ -128,12 +121,10 @@ async def _close(events: AsyncIterator[AnswerEvent]) -> None:
 
 
 def sse(event: str, data: Any) -> bytes:
-    """One Server-Sent Event frame with a JSON payload."""
     return b"event: " + event.encode() + b"\ndata: " + orjson.dumps(data) + b"\n\n"
 
 
 def event_payload(event: AnswerEvent, trace_id: str | None) -> dict[str, Any]:
-    """JSON payload of an app-layer answer event."""
     data = event.data
     if event.event == "retrieval":
         return {"hits": [HitOut.of(h).model_dump(mode="json") for h in data["hits"]]}

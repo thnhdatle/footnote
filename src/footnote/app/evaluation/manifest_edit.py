@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Targeted edits of `models/manifest.yaml` for `footnote eval calibrate --apply`.
-
-The manifest is hand-written YAML with comments and flow mappings, so the values are
-replaced in place on their lines instead of re-dumping the document: a reranker file's
-`calibrated_threshold` lives on the flow mapping that carries its SHA-256, an embedder's
-on the `calibrated_threshold:` key of its `- id:` block.
-"""
+"""Edits calibrated thresholds in the model manifest in place."""
 
 from __future__ import annotations
 
@@ -13,30 +7,25 @@ import math
 import re
 
 THRESHOLD_DECIMALS = 4
-_SCALE = 10_000  # 10**THRESHOLD_DECIMALS
+_SCALE = 10_000
 _FLOW_KEY = re.compile(r"(calibrated_threshold:\s*)([^,}\s]+)")
 _ITEM = re.compile(r"^(\s*)- id:\s*(\S+)\s*(#.*)?$")
 
 
-class ManifestEditError(ValueError):
-    """The manifest does not have the entry or key to update."""
+class ManifestEditError(ValueError): ...
 
 
 def stored_threshold(value: float) -> float:
-    """`value` rounded down to 4 decimals: the stored threshold never exceeds the computed
-    one, so every calibration claim that reached the computed value still passes."""
     units = math.floor(value * _SCALE)
     stored = units / _SCALE
     return stored if stored <= value else (units - 1) / _SCALE
 
 
 def format_threshold(value: float) -> str:
-    """The YAML literal of a stored threshold (4 decimals)."""
     return f"{value:.{THRESHOLD_DECIMALS}f}"
 
 
 def set_file_threshold(text: str, sha256: str, value: float) -> str:
-    """Set `calibrated_threshold` on the one flow mapping carrying `sha256: <sha256>`."""
     lines = text.splitlines(keepends=True)
     marker = re.compile(rf"sha256:\s*{re.escape(sha256)}\b")
     hits = [i for i, line in enumerate(lines) if marker.search(line)]
@@ -58,7 +47,6 @@ def set_file_threshold(text: str, sha256: str, value: float) -> str:
 
 
 def set_model_threshold(text: str, model_id: str, value: float) -> str:
-    """Set the block key `calibrated_threshold` of the `- id: <model_id>` entry."""
     lines = text.splitlines(keepends=True)
     start = None
     indent = 0

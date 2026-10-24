@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Documents API: upload validation and limits, quotas, list, get, patch and delete."""
 
 from __future__ import annotations
 

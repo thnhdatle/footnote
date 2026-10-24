@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tenant isolation through the HTTP layer: another tenant's ids are 404, never 403,
-and nothing of tenant A changes when tenant B addresses it."""
 
 from __future__ import annotations
 
@@ -15,7 +13,6 @@ from tests.unit.app.fakes import hash_vector
 
 
 async def _seed(rig: ApiRig) -> dict[str, str]:
-    """Tenant A: an indexed document with one chunk, plus a job; returns their ids."""
     up = await rig.client.post(
         rig.col_url(suffix="/documents"),
         headers=rig.auth(),
@@ -77,7 +74,6 @@ async def test_other_tenants_ids_are_404_on_every_route(rig: ApiRig) -> None:
         response = await rig.client.request(method, url, headers=rig.auth(rig.key_b), **kwargs)
         assert response.status_code == 404, (method, url, response.text)
         assert error_of(response)["code"] in {"not_found", "chunk_not_found"}, (method, url)
-    # Nothing of tenant A changed and B created nothing.
     assert dict(rig.db.docs) == before_docs
     assert {k: (c.status, c.settings) for k, c in rig.db.cols.items()} == before_cols
     assert not rig.db.jobs_of(rig.tenant_b)

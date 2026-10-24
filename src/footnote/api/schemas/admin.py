@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Admin models: tenants, API keys and embedding spaces."""
+"""Schemas of the admin routes."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ class QuotasIn(Request):
     max_upload_bytes_per_day: int | None = Field(default=None, ge=0)
 
     def changes(self) -> dict[str, int]:
-        """Fields the client sent with a value."""
         return {k: v for k, v in self.model_dump(exclude_unset=True).items() if v is not None}
 
 
@@ -37,7 +36,6 @@ class QuotasOut(BaseModel):
 
     @classmethod
     def of(cls, q: Quotas) -> QuotasOut:
-        """Build from the domain quotas."""
         return cls(
             max_collections=q.max_collections,
             max_documents=q.max_documents,
@@ -70,7 +68,6 @@ class TenantOut(BaseModel):
 
     @classmethod
     def of(cls, t: Tenant) -> TenantOut:
-        """Build from the domain record."""
         return cls(id=t.id, name=t.name, status=t.status.value, quotas=QuotasOut.of(t.quotas))
 
 
@@ -85,7 +82,6 @@ class UsageOut(BaseModel):
 
     @classmethod
     def of(cls, u: TenantUsage) -> UsageOut:
-        """Build from the domain record."""
         return cls(
             collections=u.collections,
             documents=u.documents,
@@ -117,7 +113,6 @@ class KeyOut(BaseModel):
 
     @classmethod
     def of(cls, k: ApiKeyRecord) -> KeyOut:
-        """Build from the domain record."""
         return cls(
             id=k.id,
             tenant_id=k.tenant_id,
@@ -138,7 +133,6 @@ class IssuedKeyOut(KeyOut):
 
     @classmethod
     def of_issued(cls, issued: IssuedKey) -> IssuedKeyOut:
-        """Build from the domain record."""
         return cls(**KeyOut.of(issued.record).model_dump(), key=issued.key)
 
 
@@ -156,7 +150,6 @@ class SpaceIn(Request):
     calibrated_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
 
     def spec(self) -> SpaceSpec:
-        """The domain spec (dimensions 0 until the manifest fills them)."""
         return SpaceSpec(
             name=self.name,
             provider=self.provider,
@@ -183,7 +176,6 @@ class SpaceOut(BaseModel):
 
     @classmethod
     def of(cls, s: EmbeddingSpace) -> SpaceOut:
-        """Build from the domain record."""
         return cls(
             id=s.id,
             name=s.name,

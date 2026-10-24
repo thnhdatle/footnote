@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared models: the error envelope, pages and accepted-job responses."""
+"""Schemas shared by several routes."""
 
 from __future__ import annotations
 
@@ -10,8 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class Request(BaseModel):
-    """Base of request bodies: unknown fields are rejected."""
-
     model_config = ConfigDict(extra="forbid")
 
 
@@ -60,12 +58,9 @@ class VersionOut(BaseModel):
 
 
 def error_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
-    """OpenAPI `responses` entries for error statuses."""
     return {s: {"model": ErrorResponse} for s in statuses}
 
 
 class Page[T](BaseModel):
-    """A page of a list endpoint; pass `next_cursor` as `?cursor=` for the next one."""
-
     data: list[T]
     next_cursor: str | None = None

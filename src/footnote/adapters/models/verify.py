@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""SHA-256 verification of local model files against the manifest."""
+"""SHA-256 verification of local model files."""
 
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ _CHUNK = 1 << 20
 
 
 class FileStatus(StrEnum):
-    """Outcome of verifying one file."""
-
     OK = "ok"
     MISSING = "missing"
     MISMATCH = "mismatch"
@@ -23,8 +21,6 @@ class FileStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class FileCheck:
-    """Verification result of one manifest file."""
-
     model_id: str
     name: str
     path: Path
@@ -32,7 +28,6 @@ class FileCheck:
 
 
 def sha256_file(path: Path) -> str:
-    """Hex SHA-256 of a file, read in chunks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         while chunk := handle.read(_CHUNK):
@@ -41,7 +36,6 @@ def sha256_file(path: Path) -> str:
 
 
 def check_file(path: Path, file: ModelFile) -> FileStatus:
-    """Compare size and SHA-256 of `path` with the manifest record."""
     if not path.is_file():
         return FileStatus.MISSING
     if path.stat().st_size != file.size or sha256_file(path) != file.sha256:
@@ -50,7 +44,6 @@ def check_file(path: Path, file: ModelFile) -> FileStatus:
 
 
 def selected_files(entry: ModelEntry, variants: list[str] | None = None) -> dict[str, ModelFile]:
-    """The files of `entry` to pull or verify: all plain files plus the chosen variants."""
     files = dict(entry.files)
     for key in variants or []:
         files[key] = entry.variants[key]
@@ -60,7 +53,7 @@ def selected_files(entry: ModelEntry, variants: list[str] | None = None) -> dict
 def verify_model(
     models_dir: Path, entry: ModelEntry, variants: list[str] | None = None
 ) -> list[FileCheck]:
-    """Verify the plain files and the chosen variants of one model."""
+    """Verifies the files of one model against the manifest."""
     return [
         FileCheck(entry.id, name, path, check_file(path, file))
         for name, file in selected_files(entry, variants).items()

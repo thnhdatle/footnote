@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""SearchStore over Postgres: one REPEATABLE READ READ ONLY snapshot per search.
-
-Binding query rules: the vector leg compares `embedding::<type>(<d>)` with the
-query cast to the same type so the space's partial expression index matches; the space
-id is inlined as an integer literal read from the database; the transaction sets
-`plan_cache_mode = force_custom_plan` and the HNSW scan settings. The lexical leg uses
-the tsquery and rank expressions of `footnote.domain.retrieval`.
-"""
+"""Search store over Postgres."""
 
 from __future__ import annotations
 
@@ -36,8 +29,6 @@ from footnote.domain.tenancy import TenantId
 
 @dataclass(frozen=True, slots=True)
 class SnapshotSettings:
-    """`retrieval.*` options applied in every search transaction."""
-
     ef_search: int = 100
     iterative_scan: str = "relaxed_order"
     max_scan_tuples: int = 20_000
@@ -47,7 +38,7 @@ _ITERATIVE_SCAN = frozenset({"off", "relaxed_order", "strict_order"})
 
 
 class PgSearchStore:
-    """Opens search snapshots over the app pool."""
+    """Opens search snapshots."""
 
     def __init__(self, db: Database, settings: SnapshotSettings | None = None) -> None:
         self._db = db
@@ -60,7 +51,6 @@ class PgSearchStore:
     async def snapshot(
         self, tenant: TenantId, collection_id: CollectionId
     ) -> AsyncIterator[PgSearchSnapshot]:
-        """Begin a snapshot; it commits when the context exits."""
         async with self._db.tenant_tx(tenant, read_only_snapshot=True) as conn:
             await conn.execute(
                 "SELECT set_config('plan_cache_mode', 'force_custom_plan', true), "
@@ -75,7 +65,7 @@ class PgSearchStore:
 
 
 class PgSearchSnapshot:
-    """SearchSnapshot bound to one open transaction."""
+    """Reads one consistent snapshot for a search."""
 
     def __init__(
         self,
@@ -96,7 +86,6 @@ class PgSearchSnapshot:
         return {"tenant": self._tenant, "cid": self._collection_id, **extra}
 
     async def collection(self) -> CollectionView:
-        """The collection as of the snapshot; NotFoundError when absent or deleting."""
         if self._view is not None:
             return self._view
         query = sql.SQL(
@@ -120,7 +109,6 @@ class PgSearchSnapshot:
         return self._view
 
     def _filters(self, filters: SearchFilters, params: dict[str, Any]) -> sql.Composable:
-        """Document-level filters on `d` as AND-ed SQL (values are bind parameters)."""
         parts: list[sql.Composable] = []
         for n, (key, value) in enumerate(sorted(filters.metadata.items())):
             values = value["in"] if isinstance(value, dict) and "in" in value else [value]
@@ -140,7 +128,7 @@ class PgSearchSnapshot:
         return sql.SQL(" AND ").join(parts)
 
     async def lexical(self, query: LexicalQuery, filters: SearchFilters) -> list[LegHit]:
-        """Lexical leg over current-version chunks, best first (ts_rank / ts_rank_cd)."""
+        """Runs the lexical leg of a search."""
         view = await self.collection()
         params = self._params(query=query.text, limit=query.limit)
         tsquery = sql.SQL(lexical_tsquery_sql(query.match, view.settings.language))
@@ -163,13 +151,12 @@ class PgSearchSnapshot:
         return [LegHit(ChunkId(r["id"]), float(r["score"])) for r in rows]
 
     async def vector(self, query: VectorQuery, filters: SearchFilters) -> list[LegHit]:
-        """Vector leg (cosine similarity), exact btree scan or partial-HNSW scan."""
+        """Runs the vector leg of a search."""
         stmt, params = await self._vector_statement(query, filters)
         rows = await fetch_all(self._conn, stmt, params)
         return [LegHit(ChunkId(r["chunk_id"]), 1.0 - float(r["dist"])) for r in rows]
 
     async def explain_vector(self, query: VectorQuery, filters: SearchFilters) -> str:
-        """`EXPLAIN` of the vector leg as it would run in this snapshot (tests, profiling)."""
         stmt, params = await self._vector_statement(query, filters)
         rows = await fetch_all(self._conn, sql.SQL("EXPLAIN {}").format(stmt), params)
         return "\n".join(str(r["QUERY PLAN"]) for r in rows)
@@ -194,8 +181,6 @@ class PgSearchSnapshot:
             filters=self._filters(filters, params),
         )
         if query.exact:
-            # `+ 0` keeps the ORDER BY from matching the HNSW ordering operator, so the
-            # planner reads the collection through the (tenant, collection, space) btree.
             stmt = sql.SQL(
                 "SELECT v.chunk_id, {dist} AS dist {common} ORDER BY {dist} + 0, v.chunk_id "
                 "LIMIT %(limit)s"
@@ -205,8 +190,6 @@ class PgSearchSnapshot:
             "SELECT set_config('hnsw.ef_search', %(ef)s, true)",
             {"ef": str(ef_search(self._settings.ef_search, query.limit))},
         )
-        # Iterative relaxed-order scans may return rows slightly out of order:
-        # re-sort the candidates by exact distance.
         stmt = sql.SQL(
             "SELECT chunk_id, dist FROM (SELECT v.chunk_id, {dist} AS dist {common} "
             "ORDER BY {dist} LIMIT %(limit)s) AS ann ORDER BY dist, chunk_id"
@@ -214,7 +197,6 @@ class PgSearchSnapshot:
         return stmt, params
 
     async def hits(self, chunk_ids: Sequence[ChunkId]) -> list[Hit]:
-        """Display data (first current-version membership), in input order."""
         if not chunk_ids:
             return []
         stmt = sql.SQL(
@@ -233,7 +215,6 @@ class PgSearchSnapshot:
     async def similarities(
         self, chunk_ids: Sequence[ChunkId], vector: Sequence[float]
     ) -> dict[ChunkId, float]:
-        """Cosine similarity of the query to each chunk's active-space vector."""
         if not chunk_ids:
             return {}
         space = (await self.collection()).active_space
@@ -252,7 +233,6 @@ class PgSearchSnapshot:
 
 
 def _distance(space: EmbeddingSpace) -> sql.Composable:
-    """`embedding::<type>(<d>) <=> %(vec)s::<type>(<d>)`, matching the partial index."""
     cast = sql.SQL(space.cast())
     return sql.SQL("(v.embedding::{cast} <=> %(vec)s::{cast})").format(cast=cast)
 

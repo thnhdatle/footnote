@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Search use case: snapshot → embed query → legs → weighted RRF → rerank."""
+"""Search use case: embed the query, run the legs, fuse and rerank."""
 
 from __future__ import annotations
 
@@ -39,14 +39,6 @@ VECTOR = "vector"
 
 @dataclass(frozen=True, slots=True)
 class SearchOverrides:
-    """Evaluation-only replacements of collection retrieval settings (ablation runs).
-
-    Not an API parameter and not subject to collection-settings validation: the eval
-    harness sweeps lexical match/rank, RRF weights, `rerank_n` and the reranker file over one
-    indexed collection.
-    None fields keep the collection's value (or the service's reranker).
-    """
-
     lexical_match: LexicalMatch | None = None
     lexical_rank: LexicalRank | None = None
     rrf_weights: Mapping[str, float] | None = None
@@ -54,7 +46,6 @@ class SearchOverrides:
     reranker: Reranker | None = None
 
     def apply(self, retrieval: RetrievalSettings) -> RetrievalSettings:
-        """`retrieval` with the overridden fields replaced."""
         return replace(
             retrieval,
             lexical_match=self.lexical_match or retrieval.lexical_match,
@@ -70,12 +61,6 @@ class SearchOverrides:
 
 @dataclass(frozen=True, slots=True)
 class SearchRequest:
-    """One search; None fields fall back to the collection settings.
-
-    `depth`, `leg_limit` and `overrides` are evaluation-only knobs, not API
-    parameters. `need_similarity` asks for query/hit cosine similarities (vector gate).
-    """
-
     query: str
     mode: SearchMode | None = None
     rerank: bool | None = None
@@ -89,13 +74,6 @@ class SearchRequest:
 
 @dataclass(frozen=True, slots=True)
 class SearchResult:
-    """Final hits plus everything the gate, the eval harness and debug output need.
-
-    `reranked` is True when the rerank stage was active, even with no candidates.
-    `ranking` is the evaluation order and `ranked_documents` the document of each
-    of its chunks, position by position.
-    """
-
     hits: list[Hit]
     collection: CollectionView
     space: EmbeddingSpace
@@ -110,8 +88,6 @@ class SearchResult:
 
 @dataclass(frozen=True, slots=True)
 class SearchConfig:
-    """Service-level retrieval options (not per collection)."""
-
     exact_scan_max: int = 20_000
     default_mode: SearchMode = SearchMode.HYBRID
 
@@ -133,7 +109,7 @@ class _Legs:
 
 
 class SearchService:
-    """Runs searches against one SearchStore."""
+    """Runs searches against a search store."""
 
     def __init__(
         self,
@@ -151,13 +127,12 @@ class SearchService:
 
     @property
     def reranker(self) -> Reranker | None:
-        """The configured reranker (None with the noop provider)."""
         return self._reranker
 
     async def search(
         self, tenant: TenantId, collection_id: CollectionId, request: SearchRequest
     ) -> SearchResult:
-        """Run one search in a single read snapshot; rerank runs after commit."""
+        """Runs one search in a read snapshot and reranks the result."""
         if not request.query.strip():
             raise ValidationError("query", "must not be empty")
         timings: dict[str, float] = {}
@@ -279,7 +254,6 @@ def _fuse(lists: Sequence[RankedList], view: CollectionView, mode: SearchMode) -
     retrieval = view.settings.retrieval
     if mode is SearchMode.HYBRID:
         return rrf(lists, FusionConfig(rrf_k=retrieval.rrf_k, weights=retrieval.rrf_weights))
-    # A single leg keeps its own order; its RRF weight may legitimately be 0.
     return rrf(lists, FusionConfig(rrf_k=retrieval.rrf_k, weights={lst.leg: 1.0 for lst in lists}))
 
 

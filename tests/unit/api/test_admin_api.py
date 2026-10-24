@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Admin API: tenants, quotas, usage, export, API keys, embedding spaces and admin auth."""
 
 from __future__ import annotations
 
@@ -26,9 +25,6 @@ async def create_tenant(rig: ApiRig, **body: Any) -> dict[str, Any]:
     assert r.status_code == 201, r.text
     created: dict[str, Any] = r.json()
     return created
-
-
-# -- tenants -----------------------------------------------------------------
 
 
 async def test_create_tenant_applies_default_quotas(rig: ApiRig) -> None:
@@ -219,9 +215,6 @@ async def test_usage_counts_the_tenants_rows(rig: ApiRig) -> None:
     }
 
 
-# -- export ------------------------------------------------------------------
-
-
 def ndjson(response: httpx.Response) -> list[dict[str, Any]]:
     assert response.headers["content-type"].startswith("application/x-ndjson")
     return [json.loads(line) for line in response.text.splitlines()]
@@ -259,9 +252,6 @@ async def test_export_of_unknown_tenant_is_a_json_error(rig: ApiRig) -> None:
     assert r.status_code == 404
     assert r.headers["content-type"].startswith("application/json")
     assert error_of(r)["code"] == "not_found"
-
-
-# -- keys --------------------------------------------------------------------
 
 
 async def issue_key(rig: ApiRig, **body: Any) -> httpx.Response:
@@ -341,12 +331,8 @@ async def test_rotate_key_issues_a_working_replacement(rig: ApiRig) -> None:
     assert new["id"] != created["id"]
     fresh = await rig.client.get("/v1/collections", headers=rig.auth(new["key"]))
     assert fresh.status_code == 200
-    # The old key stays valid for the rotation grace period.
     old = await rig.client.get("/v1/collections", headers=rig.auth(created["key"]))
     assert old.status_code == 200
-
-
-# -- embedding spaces --------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -425,8 +411,6 @@ async def test_ninth_space_hits_the_limit(rig: ApiRig) -> None:
     assert r.status_code == 409
     assert error_of(r)["code"] == "space_limit_reached"
 
-
-# -- admin authentication ----------------------------------------------------
 
 ROUTES: list[Any] = [
     pytest.param("POST", TENANTS, {"name": "x"}, id="create-tenant"),

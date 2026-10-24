@@ -33,7 +33,7 @@ Pass `--no-cache` to skip it.
 ```sh
 footnote eval retrieval --dataset scifact               # all modes
 footnote eval retrieval --dataset scifact --ablation    # the full ablation table
-make eval-quick                                         # first 50 queries, warm cache
+make eval                                               # small runs, about 10 minutes
 ```
 
 | Option | Effect |

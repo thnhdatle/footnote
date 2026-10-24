@@ -1,9 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Repositories against real Postgres; every method also runs cross-tenant.
-
-The cross-tenant side runs twice: with the defence-in-depth predicates and with them
-removed (the tenant-isolation fault mode), so RLS alone must hold.
-"""
 
 from __future__ import annotations
 
@@ -70,19 +65,16 @@ def _name(prefix: str) -> str:
 
 @pytest_asyncio.fixture
 async def a(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant A with one indexed document."""
     yield await seed(admin_db, app_db, _name("a"), ["apple pie recipe", "banana bread recipe"])
 
 
 @pytest_asyncio.fixture
 async def b(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant B (the intruder)."""
     yield await seed(admin_db, app_db, _name("b"), ["cherry tart"])
 
 
 @pytest.fixture(params=[True, False], ids=["predicates", "rls-only"])
 def b_db(request: pytest.FixtureRequest, app_pool: Pool) -> Database:
-    """The intruder's database, with or without app-side tenant predicates."""
     return Database(app_pool, app_tenant_predicates=bool(request.param))
 
 
@@ -95,9 +87,6 @@ async def _admin_count(pg: PgInfo, table: str, tenant: uuid.UUID) -> int:
         row = await cur.fetchone()
         assert row is not None
         return int(row[0])
-
-
-# --- tenants and keys (admin pool) -------------------------------------------------------
 
 
 async def test_tenant_admin_crud_and_usage(admin_db: Database, a: World, b: World) -> None:
@@ -157,9 +146,6 @@ async def test_tenant_delete_removes_every_row_and_spares_others(
         assert await _admin_count(pg, table, b.tenant) == before_b[table], table
     with pytest.raises(NotFoundError):
         await admin.get_tenant(a.tenant)
-
-
-# --- collections -----------------------------------------------------------------------
 
 
 async def test_collections_crud(app_db: Database, a: World) -> None:
@@ -223,7 +209,6 @@ async def test_collections_cross_tenant(
             await call
     await repo.set_reembed_progress(b.tenant, cid, 1, 2)
     await repo.delete_rows(b.tenant, cid)
-    # Same name in another tenant is fine.
     other = await repo.create(b.tenant, NewCollection("second", CollectionSettings(), b.space.id))
     assert other.tenant_id == b.tenant
     survivor = await PgCollections(app_db).get(a.tenant, cid)
@@ -245,9 +230,6 @@ async def test_set_language_reconfigures_chunks(pg: PgInfo, app_db: Database, a:
             (a.collection.id,),
         )
         assert await cur.fetchall() == [("english", True)]
-
-
-# --- documents ---------------------------------------------------------------------------
 
 
 async def test_upload_unchanged_and_new_versions(app_db: Database, a: World) -> None:
@@ -361,9 +343,6 @@ async def test_documents_cross_tenant(b_db: Database, app_db: Database, a: World
     assert await own.source(a.tenant, vid) == "\n\n".join(a.texts).encode()
 
 
-# --- index: chunks, vectors, swap, gc, re-embed ------------------------------------------
-
-
 async def test_incremental_version_swap_and_gc(pg: PgInfo, app_db: Database, a: World) -> None:
     index = PgIndex(app_db)
     docs = PgDocuments(app_db)
@@ -374,7 +353,7 @@ async def test_incremental_version_swap_and_gc(pg: PgInfo, app_db: Database, a: 
     assert set(existing) == {hashes[0]}
     upload = upload_of(a.collection, b"v2", external_id=record.external_id)
     _, v2, _, chunk_ids = await index_version(app_db, a.collection, a.space, upload, texts)
-    assert chunk_ids[0] == a.chunk_ids[0]  # reused chunk row
+    assert chunk_ids[0] == a.chunk_ids[0]
     col = await PgCollections(app_db).get(a.tenant, a.collection.id)
     assert col.chunk_count == 3
     versions = {v.version: v.status.value for v in await docs.versions(a.tenant, a.document_id)}
@@ -482,7 +461,7 @@ async def test_reembed_backfill_and_switch(
     assert await index.switch_space(a.tenant, a.collection.id, [gc])
     switched = await collections.get(a.tenant, a.collection.id)
     assert (switched.active_space_id, switched.target_space_id) == (target.id, None)
-    assert await index.gc_space(a.tenant, a.collection.id, target.id) == 0  # active: kept
+    assert await index.gc_space(a.tenant, a.collection.id, target.id) == 0
     assert await index.gc_space(a.tenant, a.collection.id, a.space.id) == 2
     assert await _admin_count(pg, "chunk_vectors", a.tenant) == 2
 
@@ -523,9 +502,6 @@ async def test_index_cross_tenant(b_db: Database, app_db: Database, a: World, b:
     assert await index.reembed_counts(b.tenant, cid, a.space.id) == (0, 0)
     own = PgIndex(app_db)
     assert len(await own.existing_chunks(a.tenant, did, hashes)) == 2
-
-
-# --- jobs -------------------------------------------------------------------------------
 
 
 async def test_jobs_lifecycle_and_retry(app_db: Database, a: World) -> None:

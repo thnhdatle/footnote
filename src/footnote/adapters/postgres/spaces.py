@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Embedding-space registry.
-
-Registration and deletion run over the admin pool: `footnote_register_space` is a
-SECURITY DEFINER function executable by footnote_admin only, and dropping a space's
-partial HNSW index needs the table owner. footnote_app reads spaces (SELECT only).
-"""
+"""Embedding space registry."""
 
 from __future__ import annotations
 
@@ -27,26 +22,22 @@ _SPACE_COLS = (
 
 @dataclass(frozen=True, slots=True)
 class HnswParams:
-    """`embedding.hnsw` build parameters of new partial indexes."""
-
     m: int = 16
     ef_construction: int = 64
 
 
 class PgSpaceReader:
-    """Reads registered spaces (either pool)."""
+    """Reads registered spaces."""
 
     def __init__(self, db: Database) -> None:
         self._db = db
 
     async def list_spaces(self) -> list[EmbeddingSpace]:
-        """All spaces ordered by id."""
         async with self._db.global_tx() as conn:
             rows = await fetch_all(conn, _SPACE_COLS + " ORDER BY id")
         return [space_from_row(r) for r in rows]
 
     async def list_spaces_page(self, after: int | None, limit: int) -> list[EmbeddingSpace]:
-        """Spaces ordered by id after `after` (keyset pagination)."""
         async with self._db.global_tx() as conn:
             rows = await fetch_all(
                 conn,
@@ -57,20 +48,18 @@ class PgSpaceReader:
         return [space_from_row(r) for r in rows]
 
     async def get(self, name: str) -> EmbeddingSpace:
-        """A space by name; NotFoundError when absent."""
         async with self._db.global_tx() as conn:
             row = await fetch_one(conn, _SPACE_COLS + " WHERE name = %(n)s", {"n": name})
         return space_from_row(require(row, f"embedding space {name!r} not found"))
 
     async def get_by_id(self, space_id: int) -> EmbeddingSpace:
-        """A space by id; NotFoundError when absent."""
         async with self._db.global_tx() as conn:
             row = await fetch_one(conn, _SPACE_COLS + " WHERE id = %(i)s", {"i": space_id})
         return space_from_row(require(row, f"embedding space {space_id} not found"))
 
 
 class PgSpaceAdmin(PgSpaceReader):
-    """Registers and deletes spaces over the admin pool."""
+    """Registers and deletes spaces."""
 
     def __init__(self, admin: Database, hnsw: HnswParams, max_spaces: int = 8) -> None:
         super().__init__(admin)
@@ -78,7 +67,6 @@ class PgSpaceAdmin(PgSpaceReader):
         self._max_spaces = max_spaces
 
     async def register(self, spec: SpaceSpec) -> EmbeddingSpace:
-        """Idempotent by name; only a non-null threshold updates an existing row."""
         validate_space_name(spec.name)
         index_type_for(spec.dimensions)
         async with self._db.global_tx() as conn:
@@ -117,7 +105,6 @@ class PgSpaceAdmin(PgSpaceReader):
         return space_from_row(require(row, "space not registered"))
 
     async def delete(self, name: str) -> None:
-        """Drop the space's index and row; 409 `space_in_use` while a collection uses it."""
         async with self._db.global_tx() as conn:
             await conn.execute(_LOCK)
             row = await fetch_one(

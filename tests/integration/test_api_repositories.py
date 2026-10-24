@@ -1,7 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Repository methods added for the HTTP API, against real Postgres, each cross-tenant
-with and without the defence-in-depth predicates: chunk reads, document lookup
-by external id, jobs enqueued with settings changes and deletions, tenant export."""
 
 from __future__ import annotations
 
@@ -37,19 +34,16 @@ def _name(prefix: str) -> str:
 
 @pytest_asyncio.fixture
 async def a(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant A with one indexed document (two chunks)."""
     yield await seed(admin_db, app_db, _name("a"), ["apple pie recipe", "banana bread recipe"])
 
 
 @pytest_asyncio.fixture
 async def b(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant B (the intruder)."""
     yield await seed(admin_db, app_db, _name("b"), ["cherry tart"])
 
 
 @pytest.fixture(params=[True, False], ids=["predicates", "rls-only"])
 def db(app_pool: Pool, request: pytest.FixtureRequest) -> Database:
-    """App database with and without the app-side tenant predicates."""
     return Database(app_pool, app_tenant_predicates=bool(request.param))
 
 
@@ -80,11 +74,11 @@ async def test_chunk_read_superseded_chunk_is_not_found(a: World, app_db: Databa
     upload = upload_of(a.collection, "\n\n".join(texts).encode(), external_id=external_id)
     _, _, _, chunk_ids = await index_version(app_db, a.collection, a.space, upload, texts)
     chunks = PgChunks(app_db)
-    with pytest.raises(NotFoundError) as err:  # "apple pie" is only in version 1
+    with pytest.raises(NotFoundError) as err:
         await chunks.chunk(a.tenant, a.collection.id, a.chunk_ids[0])
     assert err.value.code == "chunk_not_found"
     banana = await chunks.chunk(a.tenant, a.collection.id, a.chunk_ids[1])
-    assert banana.id == chunk_ids[0]  # reused across versions
+    assert banana.id == chunk_ids[0]
     assert [(m.version, m.ordinal) for m in banana.memberships] == [(2, 0)]
     await PgCollections(app_db).mark_deleting(a.tenant, a.collection.id)
     with pytest.raises(NotFoundError):

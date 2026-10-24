@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# make release-dry: build the wheel and sdist, then build the multi-arch
-# image (linux/amd64 + linux/arm64) without pushing, and check that it runs as non-root.
-# If a multi-arch build is not possible locally, falls back to the host architecture and
-# says so. Usage: scripts/release_dry.sh   (TAG=ghcr.io/thnhdatle/footnote:v0.1.0-dry overrides)
+# Builds the wheel, sdist and multi-arch image without pushing.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -22,8 +19,6 @@ if ! docker buildx build --platform "${DEFAULT_PLATFORMS}" -t "${TAG}" . ; then
   platforms="${host}"
   docker buildx build --platform "${platforms}" --load -t "${TAG}" .
 else
-  # A multi-platform build cannot be loaded into the local daemon; build the host
-  # architecture again (layers are cached) so the image can be inspected.
   host="linux/$(docker version --format '{{.Server.Arch}}')"
   docker buildx build --platform "${host}" --load -t "${TAG}" .
 fi

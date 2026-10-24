@@ -1,15 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Collections use case: create, read, update settings, delete.
-
-Settings arrive as partial patches merged onto the current settings (or the configured
-defaults on create) and are validated as a whole before anything is written. A change
-that needs background work starts its job in the same transaction as the settings
-write: `chunking` → `reindex`, `language` → `fts_reconfig`; `collection_delete` is
-enqueued with the `deleting` mark. Changing `embedding_space` goes through
-`ReembedService.change_space` (target space + `reembed` job, or cancel). The webhook URL
-is checked against the SSRF policy (scheme, then every resolved address) when it is
-set; a new URL or `rotate_secret` generates a secret that is returned once.
-"""
+"""Collections use case: create, read, update settings and delete."""
 
 from __future__ import annotations
 
@@ -43,17 +33,11 @@ COLLECTION_EXISTS = "collection_exists"
 
 
 def new_webhook_secret() -> str:
-    """A random webhook signing secret (`whsec_` + 32 random bytes, URL-safe base64)."""
     return "whsec_" + secrets.token_urlsafe(32)
 
 
 @dataclass(frozen=True, slots=True)
 class SettingsPatch:
-    """Partial settings; each section maps field names to new values (None = unchanged).
-
-    `retrieval["rrf_weights"]` may name one leg; the other keeps its value.
-    """
-
     chunking: Mapping[str, Any] | None = None
     retrieval: Mapping[str, Any] | None = None
     answer: Mapping[str, Any] | None = None
@@ -63,8 +47,6 @@ class SettingsPatch:
 
 @dataclass(frozen=True, slots=True)
 class WebhookPatch:
-    """Webhook change: `url` None with `set_url` removes it; `events` None keeps them."""
-
     set_url: bool = False
     url: str | None = None
     events: tuple[WebhookEvent, ...] | None = None
@@ -73,8 +55,6 @@ class WebhookPatch:
 
 @dataclass(frozen=True, slots=True)
 class ReembedProgress:
-    """`{target_space, done, total, state}` shown on the collection while a re-embed runs."""
-
     target_space: str
     done: int
     total: int
@@ -83,8 +63,6 @@ class ReembedProgress:
 
 @dataclass(frozen=True, slots=True)
 class CollectionInfo:
-    """A collection as the API shows it."""
-
     record: CollectionRecord
     active_space: str
     reembed: ReembedProgress | None
@@ -93,8 +71,6 @@ class CollectionInfo:
 
 @dataclass(frozen=True, slots=True)
 class CollectionChange:
-    """Outcome of create/update: jobs started and a webhook secret shown once."""
-
     collection: CollectionInfo
     job_ids: tuple[JobId, ...] = ()
     webhook_secret: str | None = None
@@ -102,8 +78,6 @@ class CollectionChange:
 
 @dataclass(frozen=True, slots=True)
 class CollectionConfig:
-    """Defaults and validation inputs from config (`collections.*`, `chunking.*`, …)."""
-
     defaults: CollectionSettings = field(default_factory=CollectionSettings)
     tokenizer_ids: frozenset[str] | None = None
     templates: frozenset[str] = field(default_factory=lambda: frozenset(available_templates()))
@@ -113,8 +87,6 @@ class CollectionConfig:
 
 @dataclass(frozen=True, slots=True)
 class CollectionDeps:
-    """Ports used by the collections use case; `tenants` (admin pool) enables quotas."""
-
     collections: CollectionRepository
     jobs: JobQueue
     spaces: SpaceReader
@@ -135,7 +107,6 @@ def _section[T](current: T, values: Mapping[str, Any] | None, name: str) -> T:
 
 
 def merge_settings(current: CollectionSettings, patch: SettingsPatch) -> CollectionSettings:
-    """Apply a patch to settings (no validation)."""
     retrieval_values = dict(patch.retrieval or {})
     if "rrf_weights" in retrieval_values:
         weights = retrieval_values["rrf_weights"] or {}
@@ -158,7 +129,7 @@ def _validate_name(name: str) -> str:
 
 
 class CollectionService:
-    """Collections of a tenant."""
+    """Manages the collections of a tenant."""
 
     def __init__(self, deps: CollectionDeps, config: CollectionConfig | None = None) -> None:
         self._d = deps
@@ -204,7 +175,7 @@ class CollectionService:
         patch: SettingsPatch | None = None,
         webhook: WebhookPatch | None = None,
     ) -> CollectionChange:
-        """Create a collection; 429 `quota_exceeded` beyond `max_collections`."""
+        """Creates a collection and enforces the collection quota."""
         name = _validate_name(name)
         settings = merge_settings(self._cfg.defaults, patch or SettingsPatch())
         if webhook is not None and webhook.events is not None:
@@ -230,14 +201,12 @@ class CollectionService:
         return CollectionChange(await self._info(record), (), secret)
 
     async def get(self, tenant: TenantId, collection_id: CollectionId) -> CollectionInfo:
-        """One collection with its jobs in progress."""
         record = await self._d.collections.get(tenant, collection_id)
         return await self._info(record, with_jobs=True)
 
     async def list_page(
         self, tenant: TenantId, after: CollectionId | None, limit: int
     ) -> list[CollectionInfo]:
-        """Collections ordered by id (jobs are shown by `get` only)."""
         records = await self._d.collections.list_page(tenant, after, limit)
         names = {s.id: s.name for s in await self._d.spaces.list_spaces()}
         out = []
@@ -263,7 +232,7 @@ class CollectionService:
         patch: SettingsPatch,
         webhook: WebhookPatch | None = None,
     ) -> CollectionChange:
-        """Apply a settings patch; job ids are returned for changes that start jobs."""
+        """Applies a settings patch and starts the jobs that the change needs."""
         current = await self._d.collections.get(tenant, collection_id)
         settings = merge_settings(current.settings, patch)
         if webhook is not None and webhook.events is not None:
@@ -296,7 +265,6 @@ class CollectionService:
     async def _webhook_change(
         self, current: CollectionRecord, webhook: WebhookPatch | None
     ) -> tuple[tuple[str | None, str | None] | None, str | None]:
-        """New (url, secret) column values, or None to keep them, and a secret to show."""
         if webhook is None or (not webhook.set_url and not webhook.rotate_secret):
             return None, None
         url = webhook.url if webhook.set_url else current.webhook_url
@@ -312,7 +280,7 @@ class CollectionService:
         return (url, secret), secret
 
     async def delete(self, tenant: TenantId, collection_id: CollectionId) -> JobId:
-        """Hide the collection now; its rows go with a `collection_delete` job."""
+        """Hides the collection and queues the deletion of its rows."""
         job = NewJob(JobKind.COLLECTION_DELETE.value, {"collection_id": str(collection_id)})
         ids = await self._d.collections.mark_deleting(tenant, collection_id, (job,))
         return ids[0]
@@ -320,6 +288,5 @@ class CollectionService:
     async def deliveries(
         self, tenant: TenantId, collection_id: CollectionId, limit: int
     ) -> list[DeliveryRecord]:
-        """Newest webhook deliveries of a collection."""
         await self._d.collections.get(tenant, collection_id)
         return await self._d.deliveries.list_for_collection(tenant, collection_id, limit)

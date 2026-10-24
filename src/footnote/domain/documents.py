@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Documents, versions, parsed elements, chunks and memberships."""
+"""Documents, versions, elements, chunks and memberships."""
 
 from __future__ import annotations
 
@@ -32,8 +32,6 @@ class ElementKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Element:
-    """One parsed element; `page`/`page_to` are 1-based or None for unpaged formats."""
-
     kind: ElementKind
     text: str
     order: int
@@ -43,7 +41,6 @@ class Element:
     page_to: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """JSON-ready form (stored zstd-compressed per version)."""
         return {
             "kind": self.kind.value,
             "text": self.text,
@@ -56,7 +53,6 @@ class Element:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Element:
-        """Inverse of `to_dict`."""
         return cls(
             kind=ElementKind(data["kind"]),
             text=str(data["text"]),
@@ -70,13 +66,6 @@ class Element:
 
 @dataclass(frozen=True, slots=True)
 class ChunkDraft:
-    """A chunk produced by a chunking strategy, before it gets an id.
-
-    `ordinal` is its position in the version; `oversize` flags a single indivisible
-    element (table row, code line) larger than `max_tokens`. `overlap_chars` is the number
-    of leading characters of `text` that repeat the previous chunk's tail.
-    """
-
     ordinal: int
     text: str
     heading_path: tuple[str, ...]
@@ -110,8 +99,6 @@ class VersionStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Membership:
-    """Row `(version_id, ordinal) -> chunk_id` with its page range."""
-
     version_id: VersionId
     ordinal: int
     chunk_id: ChunkId
@@ -121,8 +108,6 @@ class Membership:
 
 @dataclass(frozen=True, slots=True)
 class DocumentRef:
-    """Identity and display data of a document as seen by retrieval."""
-
     id: DocumentId
     title: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -130,8 +115,6 @@ class DocumentRef:
 
 @dataclass(frozen=True, slots=True)
 class CollectionRecord:
-    """A collection row; `settings.embedding_space` is the target space while re-embedding."""
-
     id: CollectionId
     tenant_id: TenantId
     name: str
@@ -149,8 +132,6 @@ class CollectionRecord:
 
 @dataclass(frozen=True, slots=True)
 class NewCollection:
-    """Input of `create`; `space_id` is the registered id of `settings.embedding_space`."""
-
     name: str
     settings: CollectionSettings
     space_id: int
@@ -160,12 +141,6 @@ class NewCollection:
 
 @dataclass(frozen=True, slots=True)
 class NewUpload:
-    """An accepted upload; `data` is the original file, stored zstd-compressed.
-
-    `ingest_delay` defers the `ingest` job (evaluation only: the harness indexes the
-    version in-process and leaves the job as an idempotent fallback no worker races).
-    """
-
     collection_id: CollectionId
     external_id: str | None
     title: str
@@ -180,8 +155,6 @@ class NewUpload:
 
 @dataclass(frozen=True, slots=True)
 class UploadResult:
-    """Outcome of `upload`; `unchanged` uploads create no version and no job."""
-
     document_id: DocumentId
     unchanged: bool
     version_id: VersionId | None = None
@@ -192,8 +165,6 @@ class UploadResult:
 
 @dataclass(frozen=True, slots=True)
 class DocumentRecord:
-    """A document with its current version number."""
-
     id: DocumentId
     collection_id: CollectionId
     external_id: str
@@ -209,8 +180,6 @@ class DocumentRecord:
 
 @dataclass(frozen=True, slots=True)
 class VersionRecord:
-    """One document version (without its elements)."""
-
     id: VersionId
     document_id: DocumentId
     collection_id: CollectionId
@@ -230,8 +199,6 @@ class VersionRecord:
 
 @dataclass(frozen=True, slots=True)
 class ChunkBatch:
-    """Chunks of one document version to insert; `title` is the indexed title."""
-
     collection_id: CollectionId
     document_id: DocumentId
     title: str
@@ -241,8 +208,6 @@ class ChunkBatch:
 
 @dataclass(frozen=True, slots=True)
 class SwapResult:
-    """`current` is False when a newer version was already current (this one superseded)."""
-
     current: bool
     chunk_count: int
     job_ids: tuple[JobId, ...]
@@ -250,8 +215,6 @@ class SwapResult:
 
 @dataclass(frozen=True, slots=True)
 class GcStats:
-    """Rows removed by a GC run."""
-
     memberships: int
     chunks: int
     blobs: int
@@ -259,16 +222,12 @@ class GcStats:
 
 @dataclass(frozen=True, slots=True)
 class InspectedFile:
-    """Result of the synchronous upload checks: sniffed media type and page count."""
-
     media_type: str
     pages: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ChunkPlacement:
-    """A current-version membership of a chunk (`GET …/chunks/{chunk_id}`)."""
-
     version: int
     ordinal: int
     page_from: int | None
@@ -277,8 +236,6 @@ class ChunkPlacement:
 
 @dataclass(frozen=True, slots=True)
 class ChunkDetail:
-    """A chunk of a current version with its document and memberships."""
-
     id: ChunkId
     collection_id: CollectionId
     document_id: DocumentId

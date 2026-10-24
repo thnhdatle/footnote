@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`TokenCounterFactory` over the model manifest: tokenizer ids are manifest model ids.
-
-`chunking.tokenizer` (and a collection's `chunking.tokenizer`) names a manifest entry
-whose `files` include `tokenizer`; the file is loaded once from `models.dir` and shared.
-"""
+"""Token counter factory over the model manifest."""
 
 from __future__ import annotations
 
@@ -19,12 +15,11 @@ TOKENIZER_FILE = "tokenizer"
 
 
 def tokenizer_ids(manifest: Manifest) -> frozenset[str]:
-    """Manifest ids usable as `chunking.tokenizer` (entries with a tokenizer file)."""
     return frozenset(m.id for m in manifest.models.values() if TOKENIZER_FILE in m.files)
 
 
 class ManifestTokenizers:
-    """Loads and caches one `HfTokenCounter` per tokenizer id."""
+    """Loads and caches one token counter per tokenizer id."""
 
     def __init__(self, manifest: Manifest, models_dir: Path) -> None:
         self._manifest = manifest
@@ -33,7 +28,7 @@ class ManifestTokenizers:
         self._lock = threading.Lock()
 
     def for_tokenizer(self, tokenizer_id: str) -> HfTokenCounter:
-        """Counter for `tokenizer_id`; UnavailableError when unknown or not on disk."""
+        """Returns the counter for a tokenizer id."""
         with self._lock:
             cached = self._cache.get(tokenizer_id)
             if cached is None:

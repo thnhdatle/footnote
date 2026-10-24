@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the evidence gate."""
 
 from __future__ import annotations
 
@@ -109,7 +108,6 @@ def test_calibrate_threshold_hand_example() -> None:
 
 def test_calibrate_threshold_guards_float_error() -> None:
     scores = [float(i) for i in range(1, 101)]
-    # 0.07 * 100 == 7.000000000000001 in floating point
     assert 0.07 * 100 > 7.0
     assert calibrate_threshold(scores, 0.07) == 94.0
 

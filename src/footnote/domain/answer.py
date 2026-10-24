@@ -18,8 +18,6 @@ class AbstentionReason(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Citation:
-    """A verified `[n]` marker; quote offsets index into the cited chunk's text."""
-
     n: int
     chunk_id: ChunkId
     document_id: DocumentId
@@ -32,16 +30,12 @@ class Citation:
 
 @dataclass(frozen=True, slots=True)
 class Usage:
-    """Token usage reported by the LLM."""
-
     input_tokens: int = 0
     output_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class Answer:
-    """Result of `/answers`: `text` is None when abstained."""
-
     text: str | None
     citations: tuple[Citation, ...] = ()
     abstained: bool = False

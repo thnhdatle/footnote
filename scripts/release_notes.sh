@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# Prints the CHANGELOG.md section of a release: release_notes.sh v0.1.0
+# Prints the CHANGELOG.md section of a release.
 set -euo pipefail
 
 version="${1:?usage: release_notes.sh <tag>}"

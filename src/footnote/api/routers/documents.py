@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`/v1/collections/{id}/documents`: upload, read, patch, delete, text, originals.
-
-The upload body is parsed as it streams: the middleware cuts it off past
-`ingest.max_file_bytes` plus a fixed multipart overhead, the file part is spooled to a
-temporary file beyond 8 MiB, and the exact file size is checked again by the use case
-(413 `file_too_large`). Content sniffing and the synchronous PDF/DOCX checks run behind
-the `UploadInspector` port, never on the client's Content-Type.
-"""
+"""Document routes."""
 
 from __future__ import annotations
 
@@ -66,8 +59,6 @@ _UPLOAD_BODY: dict[str, Any] = {
 
 
 class _UploadParser(MultiPartParser):
-    """Keeps up to 8 MiB of the file in memory, then spools to `TMPDIR`."""
-
     spool_max_size = SPOOL_MAX_BYTES
 
 

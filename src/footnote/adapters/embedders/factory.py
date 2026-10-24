@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`EmbedderFactory`: serves a registered space with the adapter of its provider.
-
-`on_embed(provider, texts)` is called once per embedding call (documents or query) with
-the number of texts, feeding `footnote_embedding_requests_total` and
-`footnote_embedding_texts_total`; `aclose()` releases the HTTP clients of remote spaces.
-"""
+"""Embedder factory that serves each space with the adapter of its provider."""
 
 from __future__ import annotations
 
@@ -26,8 +21,6 @@ type EmbedObserver = Callable[[str, int], None]
 
 
 class _Metered:
-    """Embedder decorator reporting each call to the observer."""
-
     def __init__(self, inner: Embedder, provider: str, observe: EmbedObserver) -> None:
         self.inner = inner
         self._provider = provider
@@ -47,8 +40,6 @@ class _Metered:
 
 @dataclass(frozen=True, slots=True)
 class OpenAICompatDefaults:
-    """Connection settings shared by every openai_compat space (`embedding.*`)."""
-
     base_url: str = ""
     api_key: str = ""
     extra_headers: dict[str, str] = field(default_factory=dict)
@@ -59,7 +50,7 @@ class OpenAICompatDefaults:
 
 
 class DefaultEmbedderFactory:
-    """Builds and caches one embedder per space id."""
+    """Builds and caches one embedder per embedding space."""
 
     def __init__(  # noqa: PLR0913 - two optional metric observers
         self,
@@ -81,7 +72,7 @@ class DefaultEmbedderFactory:
         self._remote_clients: list[OpenAICompatEmbedder] = []
 
     def for_space(self, space: EmbeddingSpace) -> Embedder:
-        """Embedder for `space`; UnavailableError for an unknown provider or model."""
+        """Returns the embedder for a space."""
         cached = self._cache.get(space.id)
         if cached is None:
             cached = self._build(space)
@@ -91,7 +82,6 @@ class DefaultEmbedderFactory:
         return cached
 
     async def aclose(self) -> None:
-        """Close the HTTP clients of the openai_compat embedders built so far."""
         clients, self._remote_clients = self._remote_clients, []
         for embedder in clients:
             await embedder.aclose()

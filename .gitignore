@@ -13,15 +13,10 @@ htmlcov/
 .ruff_cache/
 .pytest_cache/
 .hypothesis/
-mutants/
 .import_linter_cache/
 
-# Acceptance and benchmarks (raw outputs)
-acceptance/logs/
-acceptance/report.partial.md
-bench/raw/
+# Local outputs
 out/
-bench/*.raw.*
 
 # Local-only configuration
 *.local.yaml

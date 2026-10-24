@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Media-type dispatch: bytes in, domain elements out (runs inside the sandbox child)."""
+"""Dispatch from media type to parser."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _decode(data: bytes) -> str:
 
 
 def parse_bytes(media_type: str, data: bytes, limits: ParseLimits | None = None) -> list[Element]:
-    """Parse `data` of a sniffed `media_type`; raises `ParseError` on any failure."""
+    """Parses the bytes of a media type into elements."""
     limits = limits or ParseLimits()
     try:
         return _dispatch(media_type, data, limits)
@@ -28,7 +28,6 @@ def parse_bytes(media_type: str, data: bytes, limits: ParseLimits | None = None)
 
 
 def _dispatch(media_type: str, data: bytes, limits: ParseLimits) -> list[Element]:
-    # Imports are lazy so the sandbox child only loads the parser it needs.
     if media_type == media.PDF:
         from footnote.adapters.parsers.pdf_parser import parse_pdf  # noqa: PLC0415
 

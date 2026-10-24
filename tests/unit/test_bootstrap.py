@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Composition-root helpers that need no database: config checks, listeners, metrics loop."""
 
 from __future__ import annotations
 
@@ -66,9 +65,6 @@ ONNX_SPACE = {"name": "bge", "provider": "onnx_local", "model": "bge-small-en-v1
 REMOTE_SPACE = {"name": "remote", "provider": "openai_compat", "model": "m", "dimensions": 8}
 
 
-# --- build_info / clock -----------------------------------------------------------------
-
-
 def test_build_info_reads_commit_and_date() -> None:
     info = build_info({"FOOTNOTE_BUILD_COMMIT": "abc123", "FOOTNOTE_BUILD_DATE": "2026-01-01"})
     assert (info.commit, info.build_date) == ("abc123", "2026-01-01")
@@ -93,9 +89,6 @@ def test_system_clock_reports_wall_and_monotonic_time() -> None:
     assert abs(clock.now() - time.time()) < 5
     first = clock.monotonic()
     assert clock.monotonic() >= first
-
-
-# --- DSN and manifest -------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -174,9 +167,6 @@ def test_manifest_problems_skips_remote_spaces_and_noop_rerank() -> None:
     assert manifest_problems(settings, _manifest()) == []
 
 
-# --- required_models --------------------------------------------------------------------
-
-
 def test_required_models_for_the_shipped_defaults() -> None:
     needs = {n.entry.id: n for n in required_models(_settings(), _manifest())}
     assert set(needs) == {"bge-small-en-v1.5", "ms-marco-MiniLM-L6-v2"}
@@ -198,9 +188,6 @@ def test_required_models_with_remote_space_and_noop_rerank_is_only_the_tokenizer
 def test_required_models_ignores_unknown_ids() -> None:
     settings = _settings(FOOTNOTE_CHUNKING_TOKENIZER="nothing", FOOTNOTE_RERANK_MODEL="nothing")
     assert [n.entry.id for n in required_models(settings, _manifest())] == ["bge-small-en-v1.5"]
-
-
-# --- space_completer / space_specs ------------------------------------------------------
 
 
 def _spec(**kw: Any) -> SpaceSpec:
@@ -263,9 +250,6 @@ def test_space_specs_maps_configured_spaces() -> None:
     assert (remote.provider, remote.dimensions) == ("openai_compat", 8)
 
 
-# --- job_handlers -----------------------------------------------------------------------
-
-
 def test_job_handlers_cover_every_kind() -> None:
     rig = build()
     services = JobServices(
@@ -285,9 +269,6 @@ def test_job_handlers_cover_every_kind() -> None:
     assert set(handlers) == {k.value for k in JobKind}
     assert handlers["webhook"] is webhook
     assert JobKind.WEBHOOK.value == "webhook"
-
-
-# --- listeners --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -328,7 +309,7 @@ def test_bind_ipv6_loopback() -> None:
     try:
         sock = bind("[::1]:0")
     except OSError:
-        return  # IPv6 loopback is not configured on this host
+        return
     try:
         assert bound_address(sock).startswith("[::1]:")
     finally:
@@ -343,9 +324,6 @@ def test_bind_a_taken_port_raises_and_releases_the_socket() -> None:
             bind(f"127.0.0.1:{port}")
     finally:
         first.close()
-
-
-# --- report_queue_depth -----------------------------------------------------------------
 
 
 @dataclass
@@ -438,9 +416,6 @@ async def test_report_queue_depth_returns_at_once_when_already_stopped(
     await asyncio.wait_for(report_queue_depth(_runtime(_Log()), stop, 60.0), 5)
 
 
-# --- shutdown ordering ------------------------------------------------------------------
-
-
 class _FakeServer:
     def __init__(self, name: str, order: list[str]) -> None:
         self.name = name
@@ -514,9 +489,6 @@ def test_is_domain_error_and_build_info_defaults() -> None:
 
 def test_worker_id_is_unique() -> None:
     assert bootstrap.worker_id() != bootstrap.worker_id()
-
-
-# --- eval seams ---------------------------------------------------------------------------
 
 
 def test_wrapped_embedders_wrap_each_space_once() -> None:

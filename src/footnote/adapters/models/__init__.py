@@ -1,13 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Model manifest, download and SHA-256 verification (`footnote models pull|verify`).
-
-Usage::
-
-    manifest = load_manifest(Path("models/manifest.yaml"))
-    entry = manifest.get("bge-small-en-v1.5")
-    pull_model(models_dir, entry)
-    assert all(c.status is FileStatus.OK for c in verify_model(models_dir, entry))
-"""
+"""Model manifest, download and SHA-256 verification."""
 
 from footnote.adapters.models.manifest import (
     Manifest,

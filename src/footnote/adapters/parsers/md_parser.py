@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Markdown (CommonMark + tables) via markdown-it-py; front matter is ignored."""
+"""Markdown parser."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ class _Walker:
 
 
 def parse_markdown(text: str) -> list[Element]:
-    """Parse CommonMark text into elements."""
+    """Parses Markdown text into elements."""
     body = _FRONT_MATTER.sub("", text, count=1)
     tokens = MarkdownIt("commonmark").enable("table").parse(body)
     walker = _Walker()

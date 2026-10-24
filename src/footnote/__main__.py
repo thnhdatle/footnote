@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Command line entry point (typer): `serve`, `worker`, `migrate`, `healthcheck`, `config`,
-`models`, `version`, the admin groups `tenants`, `keys`, `spaces` and `eval`.
-
-Exit codes: 0 success, 1 failure (not ready, unreachable dependency, failed check),
-2 invalid configuration or usage. Heavy modules (the composition root,
-ONNX Runtime, FastAPI) are imported inside the commands that need them, so
-`footnote healthcheck` (the Docker HEALTHCHECK, no shell in the image) starts quickly.
-"""
+"""Command line entry point for the `footnote` program."""
 
 from __future__ import annotations
 
@@ -58,12 +51,8 @@ def version() -> None:
     typer.echo(pkg_version("rayld-footnote"))
 
 
-# --- serve / worker ---------------------------------------------------------------------
-
-
 def run_until_signalled(settings: Settings, options: ServeOptions) -> None:
-    """Run the process until SIGTERM/SIGINT, then shut down gracefully; exit 1 on startup
-    failures (database unreachable, port in use, ...)."""
+    """Run the process until SIGTERM or SIGINT, then shut down."""
     from footnote.bootstrap import run_process  # noqa: PLC0415 - heavy import
 
     async def main() -> None:
@@ -126,9 +115,6 @@ def _listen_overrides(listen: str | None, admin_listen: str | None) -> dict[str,
     return overrides
 
 
-# --- migrate / healthcheck --------------------------------------------------------------
-
-
 @app.command()
 def migrate(
     ctx: typer.Context,
@@ -151,7 +137,6 @@ def migrate(
 
 
 def readyz_url(listen: str) -> str:
-    """The admin listener's `/readyz` URL reachable from this host (wildcards → loopback)."""
     host, _, port = listen.rpartition(":")
     host = host.strip("[]")
     host = _LOOPBACK.get(host, host)
@@ -182,9 +167,6 @@ def healthcheck(
     if response.status_code != _HTTP_OK:
         raise fail(f"not ready ({response.status_code}): {response.text[:2000]}")
     typer.echo("ready")
-
-
-# --- config -----------------------------------------------------------------------------
 
 
 @config_app.command("validate")
@@ -229,8 +211,6 @@ def _revealed(settings: Settings) -> dict[str, Any]:
         target[path[-1]] = node.get_secret_value()
     return dump
 
-
-# --- models -----------------------------------------------------------------------------
 
 AllOption = Annotated[
     bool, typer.Option("--all", help="Every manifest model and variant, not only the configured.")

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Manifest loading, SHA-256 verification and verified pulls."""
 
 from __future__ import annotations
 
@@ -91,7 +90,7 @@ def test_verify_reports_missing_mismatch_ok(tmp_path: Path) -> None:
     model.write_bytes(b"corrupt")
     assert statuses() == {"tokenizer": FileStatus.OK, "fp32": FileStatus.MISMATCH}
     model.write_bytes(b"x" * len(PAYLOAD))
-    assert statuses()["fp32"] is FileStatus.MISMATCH  # same size, different hash
+    assert statuses()["fp32"] is FileStatus.MISMATCH
     assert sha256_file(tok) == SHA
 
 

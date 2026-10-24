@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Search and answer models."""
+"""Schemas of the search and answer routes."""
 
 from __future__ import annotations
 
@@ -40,7 +40,6 @@ class FiltersIn(Request):
     created_before: datetime | None = None
 
     def to_domain(self) -> SearchFilters:
-        """The port-level filters."""
         metadata = {
             key: {"in": value.in_} if isinstance(value, InFilter) else value
             for key, value in self.metadata.items()
@@ -54,7 +53,6 @@ class FiltersIn(Request):
 
 
 def to_filters(filters: FiltersIn | None) -> SearchFilters:
-    """Port filters (empty when absent)."""
     return SearchFilters() if filters is None else filters.to_domain()
 
 
@@ -92,7 +90,6 @@ class HitOut(BaseModel):
 
     @classmethod
     def of(cls, h: Hit, *, debug: bool = False) -> HitOut:
-        """Build from the domain hit."""
         return cls(
             chunk_id=h.chunk_id,
             document_id=h.document_id,
@@ -129,7 +126,6 @@ class SearchOut(BaseModel):
 
     @classmethod
     def of(cls, r: SearchResult, *, debug: bool) -> SearchOut:
-        """Build from the app-layer result."""
         return cls(
             hits=[HitOut.of(h, debug=debug) for h in r.hits],
             debug=SearchDebug(
@@ -167,7 +163,6 @@ class CitationOut(BaseModel):
 
     @classmethod
     def of(cls, c: Citation) -> CitationOut:
-        """Build from the domain citation."""
         return cls(
             n=c.n,
             chunk_id=c.chunk_id,
@@ -201,7 +196,6 @@ class AnswerOut(BaseModel):
 
     @classmethod
     def of(cls, a: Answer, trace_id: str | None) -> AnswerOut:
-        """Build from the domain answer."""
         return cls(
             answer=a.text,
             citations=[CitationOut.of(c) for c in a.citations],

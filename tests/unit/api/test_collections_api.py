@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Collections API: create, list, get, patch, delete and webhook deliveries."""
 
 from __future__ import annotations
 

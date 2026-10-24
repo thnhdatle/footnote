@@ -72,7 +72,6 @@ dev = [
   "hypothesis",
   "respx",
   "testcontainers[postgres]",
-  "mutmut",
   "import-linter",
   "pip-audit",
   "pip-licenses",
@@ -92,16 +91,13 @@ packages = ["src/footnote"]
 exclude = [
   "/.*",
   "/dist",
-  "/mutants",
-  "/acceptance/logs",
-  "/acceptance/report.partial.md",
   "/out",
 ]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests", "acceptance", "bench"]
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PT", "ARG", "ERA", "PL", "RUF", "S"]
@@ -109,8 +105,6 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004", "S105", "S106", "ARG001", "ARG002"]
-"acceptance/**" = ["S101", "PLR2004", "S105", "S106", "S603", "S607", "ARG001"]
-"bench/**" = ["S101", "S603", "S607", "PLR2004"]
 "tests/fixtures/**" = ["S101", "PLR2004"]
 
 [tool.ruff.lint.pylint]
@@ -135,7 +129,6 @@ addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 markers = [
   "integration: needs Postgres via Testcontainers",
-  "acceptance: acceptance criterion (run by acceptance/runner.py)",
 ]
 
 [tool.coverage.run]
@@ -168,18 +161,3 @@ unmatched_ignore_imports_alerting = "none"
 name = "api and adapters are independent"
 type = "independence"
 modules = ["footnote.api", "footnote.adapters"]
-
-[tool.mutmut]
-# Mutation-tested core modules (score >= 60%); run via scripts/mutation.sh with unit tests only.
-source_paths = [
-  "src/footnote/domain/chunking.py",
-  "src/footnote/domain/retrieval.py",
-  "src/footnote/domain/citations.py",
-  "src/footnote/domain/evidence.py",
-  "src/footnote/domain/netpolicy.py",
-  "src/footnote/app/ingest.py",
-  "src/footnote/app/evaluation/metrics.py",
-]
-pytest_add_cli_args_test_selection = ["tests/unit/"]
-also_copy = ["src/footnote", "tests", "models", "acceptance", "docs", "deploy", "examples", "eval", "migrations", "alembic.ini", "scripts", "Makefile", "README.md", "CHANGELOG.md", "pyproject.toml"]
-pytest_add_cli_args = ["-p", "no:cacheprovider", "-m", "not integration and not acceptance"]

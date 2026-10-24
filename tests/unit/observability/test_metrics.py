@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Prometheus registry: metric names and labels."""
 
 from __future__ import annotations
 

@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Job rows of the in-service queue: enqueue, cross-tenant claim, lease, completion.
-
-Claims go through the SECURITY DEFINER function `footnote.footnote_claim_jobs`
-(FOR UPDATE SKIP LOCKED across tenants); everything else runs under the job's tenant.
-Updates by a worker are guarded by `lease_owner`, so a worker whose lease expired and
-was reclaimed cannot overwrite the new owner's state.
-"""
+"""Job rows of the queue."""
 
 from __future__ import annotations
 
@@ -31,7 +25,6 @@ from footnote.domain.tenancy import TenantId
 
 
 async def insert_job(conn: Conn, tenant: TenantId, job: NewJob, job_id: JobId) -> None:
-    """Insert `job` in the caller's transaction (same-transaction enqueue)."""
     await conn.execute(
         "INSERT INTO footnote.jobs (tenant_id, id, kind, args, run_at) "
         "VALUES (%(tenant)s, %(id)s, %(kind)s, %(args)s, now() + %(delay)s)",
@@ -70,25 +63,23 @@ _COLS = sql.SQL(
 
 
 class PgJobs:
-    """Job repository over the app pool."""
+    """Job repository."""
 
     def __init__(self, db: Database, id_factory: IdFactory = new_id) -> None:
         self._db = db
         self._new_id = id_factory
 
     def new_job_id(self) -> JobId:
-        """A fresh job id (for callers that enqueue inside another repository's tx)."""
         return JobId(self._new_id())
 
     async def enqueue(self, tenant: TenantId, job: NewJob) -> JobId:
-        """Insert a queued job."""
+        """Inserts a queued job."""
         job_id = self.new_job_id()
         async with self._db.tenant_tx(tenant) as conn:
             await insert_job(conn, tenant, job, job_id)
         return job_id
 
     async def get(self, tenant: TenantId, job_id: JobId) -> JobRecord:
-        """One job of the tenant; NotFoundError for other tenants' ids."""
         query = sql.SQL("{} WHERE {} AND j.id = %(id)s").format(_COLS, self._db.tenant_filter("j"))
         async with self._db.tenant_tx(tenant) as conn:
             row = await fetch_one(conn, query, {"tenant": tenant, "id": job_id})
@@ -97,7 +88,6 @@ class PgJobs:
     async def active_for_collection(
         self, tenant: TenantId, collection_id: CollectionId
     ) -> list[JobRecord]:
-        """Queued or running jobs whose args name the collection."""
         query = sql.SQL(
             "{} WHERE {} AND j.status IN ('queued', 'running') "
             "AND j.args ->> 'collection_id' = %(cid)s ORDER BY j.created_at, j.id"
@@ -107,7 +97,7 @@ class PgJobs:
         return [_record(r) for r in rows]
 
     async def claim(self, worker: str, n: int, lease: timedelta) -> list[ClaimedJob]:
-        """Claim up to `n` due jobs across tenants (expired leases are reclaimable)."""
+        """Claims due jobs across tenants."""
         async with self._db.global_tx() as conn:
             rows = await fetch_all(
                 conn,
@@ -130,7 +120,6 @@ class PgJobs:
     async def extend_lease(
         self, tenant: TenantId, job_id: JobId, worker: str, lease: timedelta
     ) -> bool:
-        """Extend a running job's lease; False when the worker no longer owns it."""
         return await self._owned_update(
             tenant,
             sql.SQL("lease_until = now() + %(lease)s"),
@@ -140,7 +129,6 @@ class PgJobs:
     async def set_progress(
         self, tenant: TenantId, job_id: JobId, worker: str, done: int, total: int
     ) -> bool:
-        """Record `{done, total}` progress."""
         return await self._owned_update(
             tenant,
             sql.SQL(
@@ -151,7 +139,6 @@ class PgJobs:
         )
 
     async def complete(self, tenant: TenantId, job_id: JobId, worker: str) -> bool:
-        """Mark a running job done."""
         return await self._owned_update(
             tenant,
             sql.SQL("status = 'done', finished_at = now(), lease_owner = NULL, lease_until = NULL"),
@@ -166,7 +153,6 @@ class PgJobs:
         error: str,
         retry_in: timedelta | None,
     ) -> bool:
-        """Requeue after `retry_in` (jittered backoff chosen by the caller) or fail for good."""
         return await self._owned_update(
             tenant,
             sql.SQL(

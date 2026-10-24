@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Migrations, catalog and role assertions."""
 
 from __future__ import annotations
 
@@ -195,7 +194,7 @@ def test_keys_and_foreign_keys_start_with_tenant_id(pg: PgInfo) -> None:
         if table.removeprefix("footnote.") not in TENANT_TABLES:
             continue
         if referenced == "footnote.embedding_spaces":
-            continue  # global table
+            continue
         expected = "key_hash" if name == "api_keys_key_hash_key" else "tenant_id"
         assert first == expected, (table, name)
         checked += 1

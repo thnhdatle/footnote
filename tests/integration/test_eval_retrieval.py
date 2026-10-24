@@ -1,12 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`footnote eval retrieval` end to end on a tiny synthetic BEIR dataset.
-
-Real: Postgres + RLS (testcontainers), the composition root in-process, the upload and
-ingest use cases (sandboxed parser, chunking, swap), the search service with depth and
-overrides, the openai_compat embedder over HTTP wrapped in the eval cache, bm25s. Fake:
-the OpenAI-compatible provider (bag-of-words vectors, served from a thread so the CLI's
-own event loop can call it) and, for the ablation run, the cross-encoder (word overlap).
-"""
 
 from __future__ import annotations
 
@@ -46,7 +38,6 @@ TOPICS = {
 
 @pytest.fixture
 def provider() -> Iterator[FakeProvider]:
-    """The fake OpenAI-compatible provider on a loopback port, served from a thread."""
     state = FakeProvider()
     sock = bind("127.0.0.1:0")
     state.base_url = f"http://{bound_address(sock)}/v1"
@@ -61,7 +52,6 @@ def provider() -> Iterator[FakeProvider]:
 
 
 def write_dataset(root: Path) -> Path:
-    """Two documents per topic (one relevant), one query per topic, test and train qrels."""
     path = root / "data" / "tiny"
     (path / "qrels").mkdir(parents=True)
     corpus, queries = [], []
@@ -147,21 +137,19 @@ def test_cli_eval_retrieval_end_to_end_and_cached_rerun(
     assert eval_tenants(pg) == 0
     assert is_warm(tmp_path / "cache", "tiny")
     documents_embedded = [t for t in provider.embedded if "\n" in t]
-    assert documents_embedded  # chunk texts carry "title\n..."
+    assert documents_embedded
 
     provider.embedded.clear()
     second = runner.invoke(cli, args, env=env)
     assert second.exit_code == 0, second.output
-    assert [t for t in provider.embedded if "\n" in t] == []  # every chunk from the cache
-    assert len(provider.embedded) == 4 * 4  # uncached queries: vector + hybrid rows, 4 each
+    assert [t for t in provider.embedded if "\n" in t] == []
+    assert len(provider.embedded) == 4 * 4
     rerun = read_csv(sorted((tmp_path / "results").iterdir())[-1] / "retrieval.csv")
     metrics = ("recall_at_1", "recall_at_10", "recall_at_100", "ndcg_at_10", "mrr_at_10")
     assert [[r[m] for m in metrics] for r in rerun] == [[r[m] for m in metrics] for r in rows]
 
 
 class OverlapReranker:
-    """logit = query words found in the passage."""
-
     model_key = "it-overlap"
     calibrated_threshold = None
 
@@ -189,7 +177,7 @@ async def test_ablation_runs_every_m3_row_and_keeps_the_tenant_on_request(
         await services.delete_tenant(outcome.tenant)
     assert eval_tenants(pg) == 0
     names = [(r.name, r.split) for r in outcome.rows]
-    assert len(names) == 18 + 3  # ablation rows + bm25s (train, test) + bm25s+vector (test)
+    assert len(names) == 18 + 3
     assert ("hybrid lexical weight 0.2 [heading]", "train") in names
     assert ("hybrid+rerank fp32 rerank_n 50 [heading]", "test") in names
     assert ("hybrid+rerank int8 rerank_n 30 [recursive]", "test") in names

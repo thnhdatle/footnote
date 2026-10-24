@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Collection setting bounds enforced through `POST /v1/collections` (accepted at the bound,
-rejected beyond it, with the setting named in `details[0].field`)."""
 
 from __future__ import annotations
 
@@ -11,12 +9,10 @@ import pytest
 from tests.unit.api.conftest import ApiRig, error_of
 
 CASES: list[Any] = [
-    # retrieval.k (rerank_n must stay >= k)
     pytest.param({"retrieval": {"k": 1}}, None, id="k-1"),
     pytest.param({"retrieval": {"k": 100, "rerank_n": 200}}, None, id="k-100"),
     pytest.param({"retrieval": {"k": 0}}, "retrieval.k", id="k-0"),
     pytest.param({"retrieval": {"k": 101, "rerank_n": 200}}, "retrieval.k", id="k-101"),
-    # legs and RRF constant
     pytest.param({"retrieval": {"k_lexical": 1}}, None, id="k_lexical-1"),
     pytest.param({"retrieval": {"k_lexical": 1000}}, None, id="k_lexical-1000"),
     pytest.param({"retrieval": {"k_lexical": 0}}, "retrieval.k_lexical", id="k_lexical-0"),
@@ -29,7 +25,6 @@ CASES: list[Any] = [
     pytest.param({"retrieval": {"rrf_k": 1000}}, None, id="rrf_k-1000"),
     pytest.param({"retrieval": {"rrf_k": 0}}, "retrieval.rrf_k", id="rrf_k-0"),
     pytest.param({"retrieval": {"rrf_k": 1001}}, "retrieval.rrf_k", id="rrf_k-1001"),
-    # RRF weights
     pytest.param({"retrieval": {"rrf_weights": {"lexical": 0}}}, None, id="weight-lexical-0"),
     pytest.param({"retrieval": {"rrf_weights": {"vector": 0}}}, None, id="weight-vector-0"),
     pytest.param(
@@ -55,14 +50,12 @@ CASES: list[Any] = [
         "retrieval.rrf_weights",
         id="weights-both-0",
     ),
-    # rerank_n
     pytest.param({"retrieval": {"rerank_n": 1, "k": 1}}, None, id="rerank_n-1"),
     pytest.param({"retrieval": {"rerank_n": 200}}, None, id="rerank_n-200"),
     pytest.param({"retrieval": {"rerank_n": 8}}, None, id="rerank_n-equals-k"),
     pytest.param({"retrieval": {"rerank_n": 0}}, "retrieval.rerank_n", id="rerank_n-0"),
     pytest.param({"retrieval": {"rerank_n": 201}}, "retrieval.rerank_n", id="rerank_n-201"),
     pytest.param({"retrieval": {"rerank_n": 7}}, "retrieval.rerank_n", id="rerank_n-below-k"),
-    # chunking
     pytest.param(
         {"chunking": {"max_tokens": 32, "overlap_tokens": 0, "min_tokens": 0}},
         None,
@@ -92,7 +85,6 @@ CASES: list[Any] = [
     ),
     pytest.param({"chunking": {"tokenizer": "bge-small-en-v1.5"}}, None, id="tokenizer-known"),
     pytest.param({"chunking": {"tokenizer": "other"}}, "chunking.tokenizer", id="tokenizer-other"),
-    # answer
     pytest.param({"answer": {"evidence_threshold_rerank": 0}}, None, id="rerank-threshold-0"),
     pytest.param({"answer": {"evidence_threshold_rerank": 1}}, None, id="rerank-threshold-1"),
     pytest.param({"answer": {"evidence_threshold_rerank": None}}, None, id="rerank-threshold-null"),

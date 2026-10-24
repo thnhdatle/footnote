@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Data-plane application factory (`server.listen`, default `127.0.0.1:8000`).
-
-`create_app(deps)` returns a FastAPI app serving the tenant API (`/v1/collections…`,
-`/v1/jobs…`), the admin API (`/v1/admin…`, admin key), `/healthz`, `/readyz` and
-`/v1/version`. It starts nothing: no pools, no worker, no background tasks; the
-composition root owns their lifecycle and runs the app with uvicorn.
-"""
+"""Data-plane application factory."""
 
 from __future__ import annotations
 
@@ -30,7 +24,6 @@ _UPLOAD_PATH = re.compile(r"^/v1/collections/[^/]+/documents/?$")
 
 
 def data_plane_routers() -> list[APIRouter]:
-    """Every router of the data plane, in registration order."""
     return [
         collections.router,
         documents.router,
@@ -43,7 +36,6 @@ def data_plane_routers() -> list[APIRouter]:
 
 
 def build_app(deps: ApiDeps | None, *, version: str = "0.1.0") -> FastAPI:
-    """The data-plane app; `deps` None builds the route table only (OpenAPI export)."""
     app = FastAPI(
         title=TITLE,
         description=DESCRIPTION,
@@ -70,5 +62,5 @@ def build_app(deps: ApiDeps | None, *, version: str = "0.1.0") -> FastAPI:
 
 
 def create_app(deps: ApiDeps) -> FastAPI:
-    """Data-plane app over `deps` (see `footnote.api.deps` for the contract)."""
+    """Creates the data-plane app over its dependencies."""
     return build_app(deps)

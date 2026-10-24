@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Spaces above 2000 dimensions use a partial `halfvec` expression HNSW index."""
 
 from __future__ import annotations
 
@@ -56,8 +55,6 @@ def test_index_type_switches_above_2000_dims(pg: PgInfo, dims: int, index_type: 
 
 @dataclass(frozen=True)
 class Loaded:
-    """A collection of ROWS random HALF_DIMS-dimension vectors."""
-
     tenant: uuid.UUID
     collection: uuid.UUID
     space_id: int

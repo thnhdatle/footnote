@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CLI tests: exit codes, configuration handling and the commands' wiring (no database)."""
 
 from __future__ import annotations
 
@@ -28,7 +27,6 @@ runner = CliRunner()
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No FOOTNOTE_* variable of the developer's shell leaks into a test."""
     for name in list(os.environ):
         if name.startswith("FOOTNOTE_"):
             monkeypatch.delenv(name)
@@ -39,9 +37,6 @@ def test_cli_version_prints_semver() -> None:
     result = CliRunner().invoke(app, ["version"])
     assert result.exit_code == 0
     assert result.stdout.strip().count(".") == 2
-
-
-# --- config -----------------------------------------------------------------------------
 
 
 def test_config_validate_accepts_the_defaults() -> None:
@@ -109,9 +104,6 @@ def test_config_environment_variable_selects_the_file(
     assert "127.0.0.1:4343" in runner.invoke(app, ["config", "print"]).stdout
 
 
-# --- healthcheck ------------------------------------------------------------------------
-
-
 class _Stub(http.server.BaseHTTPRequestHandler):
     status = 200
 
@@ -127,7 +119,6 @@ class _Stub(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture
 def stub_server() -> Iterator[Any]:
-    """Serve `/readyz` on 127.0.0.1:<free port>; `server.status` picks the answer."""
 
     class Handler(_Stub):
         pass
@@ -194,13 +185,10 @@ def test_readyz_url(listen: str, url: str) -> None:
     assert readyz_url(listen) == url
 
 
-# --- models -----------------------------------------------------------------------------
-
 TOKENIZER_BYTES = b'{"tokenizer": true}'
 
 
 def _model_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, sha: str | None = None) -> Path:
-    """A one-model manifest, a models dir and a config needing only the tokenizer."""
     digest = sha or hashlib.sha256(TOKENIZER_BYTES).hexdigest()
     manifest = tmp_path / "manifest.yaml"
     manifest.write_text(
@@ -258,7 +246,6 @@ def test_models_verify_all_covers_every_manifest_file(
     monkeypatch.setenv("FOOTNOTE_MODELS_DIR", str(tmp_path / "empty"))
     result = runner.invoke(app, ["models", "verify", "--all"])
     assert result.exit_code == 1
-    # bge: model + tokenizer; reranker: tokenizer + fp32 + int8 for both architectures
     assert result.stdout.count("missing\t") == 6
 
 
@@ -319,9 +306,6 @@ def test_models_pull_through_the_real_function_uses_the_download_hook(
     assert target.read_bytes() == TOKENIZER_BYTES
 
 
-# --- migrate ----------------------------------------------------------------------------
-
-
 def test_migrate_needs_the_admin_dsn() -> None:
     result = runner.invoke(app, ["migrate"])
     assert result.exit_code == 2
@@ -350,9 +334,6 @@ def test_migrate_failure_exits_1(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, ["migrate"])
     assert result.exit_code == 1
     assert "migration failed: RuntimeError: no connection" in result.stderr
-
-
-# --- serve / worker ---------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("command", [["serve"], ["worker"]])
@@ -407,8 +388,6 @@ def test_worker_runs_the_worker_without_a_data_plane(monkeypatch: pytest.MonkeyP
     assert settings.admin.listen == "127.0.0.1:0"
     assert (options.data_plane, options.worker) == (False, True)
 
-
-# --- admin groups -----------------------------------------------------------------------
 
 TENANT = "00000000-0000-0000-0000-000000000001"
 

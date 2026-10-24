@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Prometheus metrics registry.
-
-One `Metrics` instance owns a private `CollectorRegistry` and is passed as a dependency;
-there is no module-level registry. No tenant or collection labels.
-"""
+"""Prometheus metrics registry."""
 
 from __future__ import annotations
 
@@ -19,7 +15,6 @@ from prometheus_client import (
     generate_latest,
 )
 
-# Bucket boundaries are declared once here.
 HTTP_BUCKETS: Final = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
 STAGE_BUCKETS: Final = (0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 120.0)
 INGEST_BUCKETS: Final = (0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 60.0, 300.0, 900.0)
@@ -30,7 +25,7 @@ type JobStatus = Literal["succeeded", "failed", "retried", "cancelled"]
 
 
 class Metrics:
-    """All Footnote metrics on one registry; expose it with `render()` at `/metrics`."""
+    """All metrics on one registry, exposed with `render()`."""
 
     def __init__(self, *, version: str, commit: str = "unknown") -> None:
         self.registry = CollectorRegistry(auto_describe=True)
@@ -107,24 +102,19 @@ class Metrics:
         build.labels(version, commit, platform.python_version()).set(1)
 
     def observe_job(self, kind: str, status: str) -> None:
-        """Count a job; ingest jobs also feed the legacy ingest series (kept equal)."""
         self.jobs.labels(kind, status).inc()
         if kind == "ingest":
             self.ingest_jobs.labels(status).inc()
 
     def observe_embedding(self, provider: str, texts: int) -> None:
-        """Count one embedding request of `texts` texts."""
         self.embedding_requests.labels(provider).inc()
         self.embedding_texts.labels(provider).inc(texts)
 
     def observe_answer(self, outcome: Outcome) -> None:
-        """Count an answer outcome."""
         self.answers.labels(outcome).inc()
 
     def observe_exact_scan(self, reason: ScanReason) -> None:
-        """Count a search served by an exact scan."""
         self.search_exact_scan.labels(reason).inc()
 
     def render(self) -> tuple[bytes, str]:
-        """Exposition body and its content type for `/metrics`."""
         return generate_latest(self.registry), CONTENT_TYPE_LATEST

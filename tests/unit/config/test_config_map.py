@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Settings to adapter config mappings."""
 
 from __future__ import annotations
 

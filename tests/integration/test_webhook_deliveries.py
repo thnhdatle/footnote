@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Webhook delivery log and the webhook job end to end (worker + sender + log), real Postgres."""
 
 from __future__ import annotations
 
@@ -32,13 +31,11 @@ URL = "https://example.com/hook"
 
 @pytest_asyncio.fixture
 async def a(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant A (its seed already holds one pending delivery row)."""
     yield await seed(admin_db, app_db, f"wa-{uuid.uuid4().hex[:8]}", ["alpha text"])
 
 
 @pytest_asyncio.fixture
 async def b(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """Tenant B (the intruder)."""
     yield await seed(admin_db, app_db, f"wb-{uuid.uuid4().hex[:8]}", ["beta text"])
 
 
@@ -102,7 +99,6 @@ async def test_cross_tenant_isolation(app_pool: Pool, a: World, b: World) -> Non
             a.tenant, _attempt(a, delivery, "delivered", 200)
         )
         assert await intruder.attempts(b.tenant, delivery) == 0
-    # b cannot write a row pointing at a's collection either (composite FK + RLS)
     with pytest.raises(NotFoundError):
         await PgWebhookDeliveries(Database(app_pool)).record_attempt(
             b.tenant, _attempt(a, uuid.uuid4(), "delivered", 200)

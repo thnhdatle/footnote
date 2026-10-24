@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Run a parser in a spawned child process that is killed after `parse_timeout`.
-
-The child gets no inherited state (spawn), no core dumps, no file creation, a CPU-time
-limit and, on Linux, an address-space limit. Elements come back over a pipe.
-"""
+"""Runs parsers in a child process that is killed on timeout."""
 
 from __future__ import annotations
 
@@ -51,7 +47,6 @@ def _apply_resource_limits(limits: ParseLimits) -> None:
 def _child(
     conn: Connection, runner: Runner, media_type: str, data: bytes, limits: ParseLimits
 ) -> None:
-    """Child entry point: parse and send `("ok", dicts)` or `("err", code, message)`."""
     try:
         _apply_resource_limits(limits)
         elements = runner(media_type, data, limits)
@@ -70,7 +65,7 @@ def run_sandboxed(
     limits: ParseLimits,
     runner: Runner = parse_bytes,
 ) -> list[Element]:
-    """Blocking sandboxed parse; raises `ParseError` (`parse_timeout`, `parse_failed`, ...)."""
+    """Parses data in a child process and kills it on timeout."""
     ctx = mp.get_context("spawn")
     parent, child_conn = ctx.Pipe(duplex=False)
     proc = ctx.Process(
@@ -93,7 +88,6 @@ def run_sandboxed(
 
 
 def _receive(conn: Connection, timeout: float) -> tuple[Any, ...] | None:
-    """The child's message, or None on timeout; a crashed child is `parse_failed`."""
     if not conn.poll(timeout):
         return None
     try:
@@ -104,12 +98,12 @@ def _receive(conn: Connection, timeout: float) -> tuple[Any, ...] | None:
 
 
 class SandboxedParser:
-    """`domain.ports.Parser` adapter: every parse runs in a killable child process."""
+    """Parser that runs every parse in a child process."""
 
     def __init__(self, limits: ParseLimits | None = None, runner: Runner = parse_bytes) -> None:
         self._limits = limits or ParseLimits()
         self._runner = runner
 
     async def parse(self, media_type: str, data: bytes) -> list[Element]:
-        """Parse `data` in the sandbox without blocking the event loop."""
+        """Parses data in the sandbox without blocking the event loop."""
         return await asyncio.to_thread(run_sandboxed, media_type, data, self._limits, self._runner)

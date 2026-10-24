@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# Generates the ONNX parity reference files in tests/reference/ using sentence-transformers in an
-# isolated `uv run --with` environment (never a project dependency). Run once; commit the output.
+# Generates the ONNX parity reference files in tests/reference/.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -107,8 +106,6 @@ ce = CrossEncoder(
     device="cpu",
     activation_fn=torch.nn.Identity(),
 )
-# fp32 forward passes yield NaN on some macOS torch builds; float64 is a strictly more precise
-# reference for the fp32 ONNX parity bound.
 ce.model.double()
 logits = ce.predict([tuple(p) for p in pairs], convert_to_numpy=True)
 with open(f"{out}/ms-marco-MiniLM-L6-v2.json", "w", encoding="utf-8") as fh:

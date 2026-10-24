@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`eval abstention` / `eval calibrate`: the answerable/unanswerable claim split, calibration
-claims, scoring, outputs."""
 
 from __future__ import annotations
 
@@ -67,14 +65,14 @@ def test_gold_documents_keeps_positive_relevance_only() -> None:
 def test_split_groups_alternates_and_skips_claims_sharing_the_other_groups_docs() -> None:
     o = _ordered(10)
     gold = {
-        o[0]: frozenset({"d0"}),  # unanswerable
-        o[1]: frozenset({"d1"}),  # answerable
-        o[2]: frozenset({"d0", "d2"}),  # unanswerable: shares only with its own group
-        o[3]: frozenset({"d0"}),  # answerable's turn, shares d0 with unanswerable: skipped
-        o[4]: frozenset({"d4"}),  # answerable (the turn was not used by the skip)
-        o[5]: frozenset({"d1"}),  # unanswerable's turn, shares d1 with answerable: skipped
-        o[6]: frozenset({"d6"}),  # unanswerable
-        o[7]: frozenset({"d7"}),  # answerable; both groups full
+        o[0]: frozenset({"d0"}),
+        o[1]: frozenset({"d1"}),
+        o[2]: frozenset({"d0", "d2"}),
+        o[3]: frozenset({"d0"}),
+        o[4]: frozenset({"d4"}),
+        o[5]: frozenset({"d1"}),
+        o[6]: frozenset({"d6"}),
+        o[7]: frozenset({"d7"}),
         o[8]: frozenset({"d8"}),
         o[9]: frozenset({"d9"}),
     }
@@ -105,7 +103,7 @@ def test_split_groups_invariants_on_random_qrels(seed: int) -> None:
     assert split.removed == u_docs
     order = sha256_order(ids)
     used = [q for q in order if q in {*split.unanswerable, *split.answerable, *split.skipped}]
-    assert used == order[: len(used)]  # a prefix of the SHA-256 order, nothing jumped
+    assert used == order[: len(used)]
 
 
 def _dataset() -> BeirDataset:
@@ -126,7 +124,6 @@ def test_abstention_split_index_and_calibration_claims_on_a_dataset() -> None:
     indexed = frozenset(d.doc_id for d in index_documents(data, split))
     assert indexed == frozenset({"d1", "d3", "d5", "d6", "d7"})
     gold = gold_documents(data.qrels["train"])
-    # t1 has a removed gold doc; t3 has no gold doc; t2 and t4 are fully indexed.
     assert calibration_claims(list(gold), gold, indexed) == ["t2", "t4"]
 
 
@@ -185,7 +182,6 @@ def test_calibrate_is_the_largest_threshold_reaching_the_target_rate() -> None:
     values = [0.95, 0.9, 0.8, 0.7, 0.66666666, 0.6, 0.5, 0.4, 0.3, 0.1]
     scores = _scores(values)
     result = calibrate(scores, list(scores.scores), 0.85, current=0.35)
-    # 85% of 10 = 8.5 -> 9 claims must pass: the 9th highest score.
     assert result.threshold == 0.3
     assert result.stored == 0.3
     assert result.answered == 9
@@ -193,10 +189,10 @@ def test_calibrate_is_the_largest_threshold_reaching_the_target_rate() -> None:
     assert result.as_dict()["answer_rate_at_stored"] == 0.9
     assert result.as_dict()["current"] == 0.35
     eight = calibrate(scores, list(scores.scores)[:8], 0.5, current=None)
-    assert eight.threshold == 0.7  # 4 of 8
+    assert eight.threshold == 0.7
     rounded = calibrate(scores, ["c4", "c0"], 1.0, current=None)
     assert rounded.threshold == 0.66666666
-    assert rounded.stored == 0.6666  # down to 4 decimals: the claim at the value passes
+    assert rounded.stored == 0.6666
     assert rounded.answered == 2
 
 
@@ -204,7 +200,7 @@ def test_summarise_auc_rates_and_best_balanced_threshold() -> None:
     positive = [0.9, 0.8, 0.7, 0.2]
     negative = [0.1, 0.3, 0.75, 0.05]
     s = summarise(positive, negative, 0.35)
-    assert s.auc == pytest.approx(13 / 16)  # pairs won: 4 + 4 + 3 + 2
+    assert s.auc == pytest.approx(13 / 16)
     assert (s.at_threshold.answer_rate, s.at_threshold.abstain_rate) == (0.75, 0.75)
     assert len(s.curve) == 101
     assert min(s.best.answer_rate, s.best.abstain_rate) == 0.75

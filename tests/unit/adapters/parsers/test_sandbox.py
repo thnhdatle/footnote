@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Sandbox: timeout kill, crash containment, error code propagation and limits."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""OpenAI-compatible `/embeddings` client with batching, bounded concurrency and retries."""
+"""Client for the embeddings endpoint of an OpenAI-compatible provider."""
 
 from __future__ import annotations
 
@@ -21,8 +21,6 @@ _MAX_RETRY_AFTER = 30.0
 
 @dataclass(frozen=True, slots=True)
 class OpenAICompatSettings:
-    """`embedding.*` settings of one openai_compat space."""
-
     base_url: str
     model: str
     dimensions: int
@@ -51,7 +49,7 @@ def _retry_after(response: httpx.Response) -> float:
 
 
 class OpenAICompatEmbedder:
-    """Implements `ports.Embedder` against an OpenAI-compatible provider."""
+    """Embeds text through an OpenAI-compatible provider."""
 
     def __init__(
         self,
@@ -74,7 +72,6 @@ class OpenAICompatEmbedder:
         self._gate = asyncio.Semaphore(settings.max_concurrency)
 
     async def aclose(self) -> None:
-        """Close the HTTP client when this adapter created it."""
         if self._owns_client:
             await self._client.aclose()
 
@@ -151,7 +148,7 @@ class OpenAICompatEmbedder:
         )
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed texts in batches; every vector is L2-normalised."""
+        """Embeds texts in batches into normalized vectors."""
         size = self._settings.batch_size
         batches = [texts[i : i + size] for i in range(0, len(texts), size)]
         tasks = [asyncio.ensure_future(self._post_batch(b)) for b in batches]
@@ -165,5 +162,5 @@ class OpenAICompatEmbedder:
         return [l2_normalise(v) for batch in results for v in batch]
 
     async def embed_query(self, text: str) -> list[float]:
-        """Embed one query (no prefix for provider models)."""
+        """Embeds one query."""
         return (await self.embed_documents([text]))[0]

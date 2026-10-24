@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""structlog setup: JSON by default, text for development.
-
-Loggers are built explicitly and passed as dependencies; nothing here configures
-structlog globally. Keys follow the a fixed key vocabulary (`ALLOWED_KEYS`) plus
-`collection_id` and `document_id`.
-"""
+"""Structured logging with JSON or text output."""
 
 from __future__ import annotations
 
@@ -21,7 +16,6 @@ from footnote.config import LogConfig
 
 CONTENT_LIMIT = 256
 
-# Output keys: "ts", "level" and "msg" are added by the processors; the rest is fixed.
 BASE_KEYS = frozenset({"ts", "level", "msg"})
 ALLOWED_KEYS = BASE_KEYS | {
     "request_id",
@@ -58,12 +52,10 @@ _LEVELS = {
 
 
 def unknown_keys(event: Mapping[str, Any]) -> set[str]:
-    """Keys of a rendered log event outside the fixed vocabulary."""
     return set(event) - ALLOWED_KEYS
 
 
 def capture_content(text: str, *, enabled: bool) -> str | None:
-    """`text` truncated to 256 chars when `log.capture_content` is on, else None."""
     if not enabled:
         return None
     return text if len(text) <= CONTENT_LIMIT else text[:CONTENT_LIMIT]
@@ -99,10 +91,7 @@ def make_logger(
     stream: TextIO | None = None,
     strict: bool = False,
 ) -> structlog.typing.FilteringBoundLogger:
-    """A logger for `component` writing to `stream` (stderr by default).
-
-    `strict` raises on keys outside the vocabulary (used by tests of application code).
-    """
+    """Builds a logger for a component."""
     processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,

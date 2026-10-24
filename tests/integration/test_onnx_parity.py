@@ -1,9 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""ONNX parity against the committed sentence-transformers reference outputs.
-
-Needs the pinned model files: they come from `FOOTNOTE_MODELS_DIR` (default
-`~/.cache/rayld/footnote/models`) and are pulled and SHA-256-verified when missing.
-"""
 
 from __future__ import annotations
 

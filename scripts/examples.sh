@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
-# make examples: run the check.sh of every directory in examples/.
+# Runs the check.sh of every directory in examples/.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

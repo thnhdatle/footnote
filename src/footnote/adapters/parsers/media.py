@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Supported media types and content sniffing (never trust the client header)."""
+"""Supported media types and content sniffing."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ _BOM = b"\xef\xbb\xbf"
 
 
 def sniff(data: bytes, filename: str = "") -> str:
-    """Media type from content; the filename only separates HTML/Markdown/TXT text."""
+    """Detects the media type from the content."""
     if data.startswith(b"%PDF-"):
         return PDF
     if data.startswith(b"PK"):

@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Adapter pieces the composition root relies on: tokenizers, lazy reranker, readiness,
-pulls, embedding metrics, worker outcomes, webhook attempts, probes and migrations."""
 
 from __future__ import annotations
 
@@ -70,9 +68,6 @@ def _entry(**kw: Any) -> ModelEntry:
     return ModelEntry(**{**base, **kw})
 
 
-# --- tokenizers -------------------------------------------------------------------------
-
-
 def _tokenizer_models(tmp_path: Path) -> tuple[Manifest, Path]:
     models = tmp_path / "models"
     (models / "tok").mkdir(parents=True)
@@ -117,9 +112,6 @@ def test_manifest_tokenizers_load_a_file_that_appears_later(tmp_path: Path) -> N
     assert tokenizers.for_tokenizer("absent").count("a") == 1
 
 
-# --- LazyOnnxReranker -------------------------------------------------------------------
-
-
 def _reranker_entry() -> ModelEntry:
     return _entry(
         id="rr",
@@ -137,7 +129,7 @@ def test_lazy_reranker_reads_key_and_threshold_from_the_manifest(tmp_path: Path)
     entry = _reranker_entry()
     rr = LazyOnnxReranker(tmp_path, entry, variant="fp32")
     assert rr.model_key == entry.variants["fp32"].sha256
-    assert rr.calibrated_threshold == 0.1  # nothing was loaded: the directory is empty
+    assert rr.calibrated_threshold == 0.1
 
 
 def test_lazy_reranker_selects_the_int8_file_of_another_arch(tmp_path: Path) -> None:
@@ -190,9 +182,6 @@ async def test_lazy_reranker_loads_once(monkeypatch: pytest.MonkeyPatch, tmp_pat
     ]
 
 
-# --- ModelReadiness / ModelNeed ---------------------------------------------------------
-
-
 def test_model_need_files_selects_keys_or_every_plain_file() -> None:
     entry = _reranker_entry()
     assert set(ModelNeed(entry).files()) == {"tokenizer"}
@@ -237,9 +226,6 @@ async def test_readiness_does_not_hash_a_verified_file_again(
     assert names.count("model.onnx") == 2
 
 
-# --- pull_files -------------------------------------------------------------------------
-
-
 def test_pull_files_downloads_only_what_is_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -281,9 +267,6 @@ def test_pull_files_uses_the_given_client_and_leaves_it_open(
         pull_files(tmp_path, entry, entry.files, client=client)
         assert clients == [client]
         assert not client.is_closed
-
-
-# --- embedder factory metrics -----------------------------------------------------------
 
 
 class _Embedder:
@@ -330,10 +313,7 @@ async def test_aclose_closes_openai_compat_clients(tmp_path: Path) -> None:
     assert not client.is_closed
     await factory.aclose()
     assert client.is_closed
-    await factory.aclose()  # idempotent
-
-
-# --- worker outcomes --------------------------------------------------------------------
+    await factory.aclose()
 
 
 async def _outcomes(handler: Any, **cfg: Any) -> list[tuple[str, str]]:
@@ -384,9 +364,6 @@ async def test_worker_reports_exhausted_attempts_as_failed() -> None:
     assert seen == [("k", "failed")]
 
 
-# --- webhook on_attempt -----------------------------------------------------------------
-
-
 async def _attempt_statuses(respond: httpx.Response, attempts_made: int) -> list[str]:
     fakes = Fakes(attempts_made=attempts_made)
     statuses: list[str] = []
@@ -420,9 +397,6 @@ async def test_webhook_handler_reports_each_attempt(
     status_code: int, attempts_made: int, expected: str
 ) -> None:
     assert await _attempt_statuses(httpx.Response(status_code), attempts_made) == [expected]
-
-
-# --- models endpoint probe --------------------------------------------------------------
 
 
 def _client(handler: Any) -> httpx.AsyncClient:
@@ -473,9 +447,6 @@ async def test_probe_reports_a_transport_error() -> None:
     assert "ConnectError" in problem
 
 
-# --- migrations -------------------------------------------------------------------------
-
-
 def test_find_migrations_in_the_repository() -> None:
     path = find_migrations()
     assert path is not None
@@ -489,7 +460,7 @@ def test_find_migrations_skips_candidates_without_scripts(tmp_path: Path) -> Non
     (tmp_path / "migrations").mkdir()
     assert find_migrations([tmp_path]) is None
     (tmp_path / "migrations" / "env.py").write_text("", encoding="utf-8")
-    assert find_migrations([tmp_path]) is None  # no versions/ yet
+    assert find_migrations([tmp_path]) is None
     (tmp_path / "migrations" / "versions").mkdir()
     assert find_migrations([tmp_path / "elsewhere", tmp_path]) == tmp_path / "migrations"
 
@@ -503,9 +474,6 @@ def test_alembic_config_carries_the_dsn_in_memory() -> None:
     assert cfg.attributes[ADMIN_URL_ATTRIBUTE] == "postgresql://admin@db/x"
     assert cfg.get_main_option("script_location") == str(ROOT / "migrations")
     assert "postgresql" not in str(cfg.cmd_opts or "")
-
-
-# --- postgres health helpers (no database) ----------------------------------------------
 
 
 @pytest.mark.parametrize(

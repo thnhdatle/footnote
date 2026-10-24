@@ -1,7 +1,0 @@
-name,split,mode,chunking,settings,shipped,recall_at_1,recall_at_5,recall_at_10,recall_at_100,ndcg_at_10,mrr_at_10,p50_ms,p95_ms,queries
-vector [heading],test,vector,heading,chunking=heading,yes,0.5854,0.7661,0.8469,0.9567,0.7221,0.6870,32.1,37.2,300
-lexical any+ts_rank [heading],test,lexical,heading,chunking=heading lexical_match=any lexical_rank=ts_rank,yes,0.4500,0.6514,0.7205,0.8556,0.5900,0.5587,31.0,40.5,300
-hybrid lexical weight 0.3 [heading],test,hybrid,heading,"chunking=heading lexical_match=any lexical_rank=ts_rank rrf_k=60 rrf_weights=lexical:0.3,vector:1",yes,0.5794,0.7788,0.8496,0.9567,0.7205,0.6850,60.5,75.3,300
-hybrid+rerank int8 rerank_n 30 [heading],test,hybrid+rerank,heading,"chunking=heading lexical_match=any lexical_rank=ts_rank rrf_k=60 rrf_weights=lexical:0.3,vector:1 reranker=int8 rerank_n=30",yes,0.5646,0.7660,0.8402,0.9567,0.7047,0.6678,299.4,340.3,300
-bm25s,test,bm25s,none,"bm25s lucene k1=1.5 b=0.75, English stopwords, Snowball stemmer",,0.5342,0.7362,0.8187,0.9127,0.6863,0.6492,0.2,0.2,300
-bm25s + vector RRF,test,bm25s+vector,heading,"rrf_k=60 rrf_weights=lexical:0.3,vector:1; document-level fusion",,0.5961,0.7918,0.8536,0.9700,0.7343,0.7010,32.3,37.5,300

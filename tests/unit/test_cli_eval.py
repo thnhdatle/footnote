@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`footnote eval cache status`."""
 
 from __future__ import annotations
 

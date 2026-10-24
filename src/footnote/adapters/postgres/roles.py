@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Role checks for `/readyz`: the app DSN must not be able to bypass RLS."""
+"""Role checks for readiness."""
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ WHERE r.rolname = current_user
 
 
 async def app_role_problems(app: Database) -> list[str]:
-    """Reasons the app role is unsafe (empty when it is fine)."""
     async with app.global_tx() as conn:
         row = await fetch_one(conn, _CHECK, {"admin": ADMIN_ROLE})
     if row is None:

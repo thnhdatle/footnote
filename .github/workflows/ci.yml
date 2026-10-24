@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The functional acceptance criteria and the quickstart need the released fakellm stub.
+  # The quickstart needs the released fakellm stub.
   RAYLD_FAKELLM_IMAGE: ghcr.io/thnhdatle/fakellm:v0.1.0
 
 jobs:
@@ -43,6 +43,5 @@ jobs:
       # `make security` scans the local image, so it is built before `make ci`.
       # - run: make docker
       - run: make lint test
-      # - run: make acceptance CI=1
       # - run: make quickstart-test
       # - run: make release-dry

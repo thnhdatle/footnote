@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Seeds a tenant with one indexed document through the real repositories."""
 
 from __future__ import annotations
 
@@ -42,7 +41,6 @@ DIMS = 8
 
 
 def hash_vector(text: str, dims: int = DIMS) -> list[float]:
-    """Deterministic non-normalised vector of a text."""
     digest = hashlib.sha256(text.encode()).digest()
     return [(b - 127.5) / 127.5 for b in digest[:dims]]
 
@@ -50,7 +48,6 @@ def hash_vector(text: str, dims: int = DIMS) -> list[float]:
 def drafts_for(
     title: str, texts: Sequence[str], path: tuple[str, ...] = ("Intro",)
 ) -> list[ChunkDraft]:
-    """One chunk draft per text (pages 1..n)."""
     out = []
     for n, text in enumerate(texts):
         emb = embedded_text(title, path, text)
@@ -71,8 +68,6 @@ def drafts_for(
 
 @dataclass
 class World:
-    """One tenant with a key, a collection and an indexed document."""
-
     tenant: TenantId
     key: str
     key_id: UUID
@@ -92,7 +87,6 @@ async def index_version(
     upload: NewUpload,
     texts: Sequence[str],
 ) -> tuple[DocumentId, VersionId, JobId, list[ChunkId]]:
-    """Upload, store elements, insert chunks + vectors and swap the version in."""
     world_tenant = collection.tenant_id
     documents = PgDocuments(app_db)
     index = PgIndex(app_db)
@@ -134,7 +128,6 @@ def upload_of(
     title: str = "Doc",
     metadata: dict[str, object] | None = None,
 ) -> NewUpload:
-    """A NewUpload of `data` with defaults."""
     return NewUpload(
         collection_id=collection.id,
         external_id=external_id,
@@ -154,7 +147,6 @@ async def seed(
     texts: Sequence[str],
     space_name: str = SPACE_NAME,
 ) -> World:
-    """Create a tenant with everything a tenant table can hold."""
     admin = PgTenantAdmin(admin_db)
     tenant = await admin.create_tenant(name, Quotas())
     issued = await admin.create_key(tenant.id, "default")
@@ -194,5 +186,4 @@ async def seed(
 
 
 async def app_connection(dsn: str) -> psycopg.AsyncConnection[tuple[object, ...]]:
-    """A raw autocommit connection (as whatever role `dsn` names)."""
     return await psycopg.AsyncConnection.connect(dsn, autocommit=True)

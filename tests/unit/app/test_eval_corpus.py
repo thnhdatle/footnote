@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Corpus indexing through the upload + ingest use cases (evaluation harness)."""
 
 from __future__ import annotations
 
@@ -22,8 +21,6 @@ from .rig import Rig, build
 
 
 class RigUploader:
-    """`DocumentService.upload` reduced to the repository call (no inspector)."""
-
     def __init__(self, rig: Rig, fail_on: str | None = None) -> None:
         self.rig = rig
         self.fail_on = fail_on
@@ -84,7 +81,6 @@ async def test_index_corpus_indexes_every_document_and_maps_ids() -> None:
     ingest_jobs = rig.db.jobs_of(rig.tenant, "ingest")
     assert len(ingest_jobs) == 3
     assert {j.delay for j in ingest_jobs} == {INGEST_JOB_DELAY}
-    # every version is current: the deferred job would be a no-op
     titles = {
         rig.db.chunks[(rig.tenant, c)].embedded_text.split("\n", 1)[0]
         for c in rig.db.current_chunks(rig.tenant, rig.collection.id)

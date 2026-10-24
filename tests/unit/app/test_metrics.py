@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for retrieval and abstention metrics."""
 
 from __future__ import annotations
 
@@ -46,9 +45,7 @@ def test_ndcg_at_k_hand_example() -> None:
 
 
 def test_ndcg_at_k_cutoff_limits_ideal_and_actual() -> None:
-    # k=2: DCG = 3/log2(3); IDCG = 3 + 2/log2(3)
     assert ndcg_at_k(RANKED, QRELS, 2) == pytest.approx((3 / LOG3) / (3 + 2 / LOG3), abs=1e-12)
-    # k=1: DCG = 0 (doc a has grade 0), IDCG = 3
     assert ndcg_at_k(RANKED, QRELS, 1) == 0.0
 
 
@@ -109,7 +106,6 @@ def test_roc_auc_hand_examples() -> None:
     assert roc_auc([0.9, 0.8], [0.1, 0.2]) == 1.0
     assert roc_auc([0.1], [0.9]) == 0.0
     assert roc_auc([0.5], [0.5]) == 0.5
-    # positives 3, 5, 4 vs negatives 1, 4: 1 + 2 + 1.5 wins out of 6 pairs
     assert roc_auc([3.0, 5.0, 4.0], [1.0, 4.0]) == pytest.approx(4.5 / 6, abs=1e-15)
 
 

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the collection settings bounds and the chunking settings hash."""
 
 from __future__ import annotations
 

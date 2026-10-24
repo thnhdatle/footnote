@@ -1,16 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`footnote eval retrieval`: index a BEIR dataset into a temporary tenant,
-run every query of a split per configuration, pool chunks to documents and score them.
-
-Depth and pooling: every search runs with the internal `depth` 100 and leg sizes
-`k_lexical` = `k_vector` = max(configured, 100) (`SearchRequest.leg_limit`); with rerank
-the top `rerank_n` come in rerank order, then the remaining hits in RRF order
-(`domain.retrieval.eval_order`). Chunks are pooled to their BEIR documents by first
-occurrence (`pool_documents`) and the metrics cut that list. Settings swept by the
-ablation (lexical match/rank, RRF weights, reranker file, `rerank_n`) reach the search as
-`SearchOverrides` over one indexed collection; a chunking strategy is its own collection.
-Latency is the in-process `SearchService.search` time (query embedding included).
-"""
+"""Runs retrieval evaluation variants against a BEIR dataset in a temporary tenant."""
 
 from __future__ import annotations
 
@@ -57,20 +46,16 @@ TEST = "test"
 
 
 class EvalMode(StrEnum):
-    """Evaluation modes: one leg, both fused, or fused and reranked."""
-
     VECTOR = "vector"
     LEXICAL = "lexical"
     HYBRID = "hybrid"
     HYBRID_RERANK = "hybrid+rerank"
 
 
-class EvalError(RuntimeError):
-    """The evaluation cannot run as asked (bad option, missing split or reranker)."""
+class EvalError(RuntimeError): ...
 
 
 def parse_modes(text: str) -> list[EvalMode]:
-    """Comma-separated modes, in the given order, deduplicated."""
     names = [n.strip() for n in text.split(",") if n.strip()]
     try:
         return list(dict.fromkeys(EvalMode(n) for n in names))
@@ -80,7 +65,6 @@ def parse_modes(text: str) -> list[EvalMode]:
 
 
 def parse_chunkings(text: str) -> list[ChunkingStrategyName]:
-    """Comma-separated chunking strategies, deduplicated."""
     names = [n.strip() for n in text.split(",") if n.strip()]
     try:
         return list(dict.fromkeys(ChunkingStrategyName(n) for n in names))
@@ -91,22 +75,17 @@ def parse_chunkings(text: str) -> list[ChunkingStrategyName]:
 
 @dataclass(frozen=True)
 class Shipped:
-    """The shipped defaults the rows vary from (config collection defaults)."""
-
     retrieval: RetrievalSettings
     chunking: ChunkingStrategyName
     reranker_variant: str
 
     @property
     def lexical_weight(self) -> float:
-        """Shipped `rrf_weights.lexical`."""
         return float(self.retrieval.rrf_weights.get("lexical", 0.0))
 
 
 @dataclass(frozen=True)
 class Variant:
-    """One fully resolved configuration on one split."""
-
     mode: EvalMode
     split: str
     chunking: ChunkingStrategyName
@@ -121,7 +100,6 @@ class Variant:
     def shipped(
         cls, shipped: Shipped, mode: EvalMode, split: str, chunking: ChunkingStrategyName
     ) -> Variant:
-        """`mode` with every setting at its shipped value."""
         r = shipped.retrieval
         return cls(
             mode,
@@ -136,16 +114,13 @@ class Variant:
         )
 
     def with_(self, **changes: object) -> Variant:
-        """A copy with `changes`."""
         return replace(self, **changes)  # type: ignore[arg-type]
 
     def is_shipped(self, shipped: Shipped) -> bool:
-        """Every setting this mode uses is at its shipped value."""
         base = Variant.shipped(shipped, self.mode, self.split, shipped.chunking)
         return self.key() == base.key()
 
     def key(self) -> tuple[object, ...]:
-        """Identity over the settings the mode actually uses."""
         lexical = (self.lexical_match, self.lexical_rank)
         fused = (self.lexical_weight,)
         rerank = (self.reranker_variant, self.rerank_n)
@@ -159,7 +134,6 @@ class Variant:
 
     @property
     def name(self) -> str:
-        """Row label."""
         labels = {
             EvalMode.VECTOR: "vector",
             EvalMode.LEXICAL: f"lexical {self.lexical_match}+{self.lexical_rank}",
@@ -171,7 +145,6 @@ class Variant:
         return f"{labels[self.mode]} [{self.chunking}]"
 
     def settings(self, retrieval: RetrievalSettings) -> str:
-        """The settings this row runs with (CSV `settings` column)."""
         parts = [f"chunking={self.chunking}"]
         if self.mode in (EvalMode.LEXICAL, EvalMode.HYBRID, EvalMode.HYBRID_RERANK):
             parts.append(f"lexical_match={self.lexical_match} lexical_rank={self.lexical_rank}")
@@ -186,7 +159,6 @@ class Variant:
         return " ".join(parts)
 
     def request(self, query: str, rerankers: Mapping[str, Reranker]) -> SearchRequest:
-        """The app-layer search request of this configuration (depth 100, legs ≥ 100)."""
         rerank = self.mode is EvalMode.HYBRID_RERANK
         reranker: Reranker | None = None
         if rerank:
@@ -231,12 +203,10 @@ def plan_variants(
     chunkings: Sequence[ChunkingStrategyName],
     split: str,
 ) -> list[Variant]:
-    """Without `--ablation`: every mode and chunking at shipped settings on `split`."""
     return _unique([Variant.shipped(shipped, m, split, c) for c in chunkings for m in modes])
 
 
 def plan_ablation(shipped: Shipped) -> list[Variant]:
-    """The ablation row set, shipped values always included and marked by the report."""
     c = shipped.chunking
     vector = Variant.shipped(shipped, EvalMode.VECTOR, TEST, c)
     lexical = Variant.shipped(shipped, EvalMode.LEXICAL, TEST, c)
@@ -260,18 +230,13 @@ def plan_ablation(shipped: Shipped) -> list[Variant]:
 
 
 class Searcher(Protocol):
-    """`SearchService.search`."""
-
     async def search(
         self, tenant: TenantId, collection_id: CollectionId, request: SearchRequest
-    ) -> SearchResult:
-        """One search."""
+    ) -> SearchResult: ...
 
 
 @dataclass(frozen=True)
 class IndexedCollection:
-    """A collection of the temporary tenant holding the corpus with one chunking."""
-
     tenant: TenantId
     collection_id: CollectionId
     doc_ids: Mapping[DocumentId, str]
@@ -279,14 +244,11 @@ class IndexedCollection:
 
 @dataclass(frozen=True)
 class RunOutput:
-    """Pooled document rankings (top `EVAL_DEPTH`) and search seconds per query."""
-
     rankings: dict[str, list[str]]
     seconds: dict[str, float]
 
 
 def pooled(result: SearchResult, doc_ids: Mapping[DocumentId, str]) -> list[str]:
-    """BEIR document ids of a result's evaluation ranking, first occurrence, top 100."""
     return pool_documents(doc_ids[d] for d in result.ranked_documents)[:EVAL_DEPTH]
 
 
@@ -299,7 +261,6 @@ async def run_variant(  # noqa: PLR0913 - the run inputs
     *,
     clock: Callable[[], float] = time.perf_counter,
 ) -> RunOutput:
-    """Run every query sequentially (latency is one query at a time)."""
     rankings: dict[str, list[str]] = {}
     seconds: dict[str, float] = {}
     for qid, text in queries:
@@ -314,7 +275,6 @@ async def run_variant(  # noqa: PLR0913 - the run inputs
 
 
 def split_queries(dataset: BeirDataset, split: str) -> list[tuple[str, str]]:
-    """(query id, text) of `split` in qrels order; EvalError for an unknown split."""
     if split not in dataset.qrels:
         known = ", ".join(sorted(dataset.qrels)) or "none"
         raise EvalError(f"dataset {dataset.name} has no qrels split {split!r} (has: {known})")
@@ -334,7 +294,6 @@ def make_row(  # noqa: PLR0913 - one value per report column group
     group: str = "",
     note: str = "",
 ) -> Row:
-    """Score a run against the qrels of its queries (seconds → ms percentiles)."""
     judged = {q: qrels[q] for q in output.rankings if q in qrels}
     if not judged:
         raise EvalError(f"{name}: no judged queries")
@@ -355,13 +314,8 @@ def make_row(  # noqa: PLR0913 - one value per report column group
     )
 
 
-# --- orchestration ----------------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class EvalServices:
-    """App services of the in-process runtime the harness drives."""
-
     admin: AdminService
     collections: CollectionService
     uploader: Uploader
@@ -381,8 +335,6 @@ def _quiet(_message: str) -> None:
 
 @dataclass(frozen=True)
 class EvalOptions:
-    """How to run: the variants, tenant handling, ingest concurrency, baselines."""
-
     variants: Sequence[Variant]
     shipped: Shipped
     run_id: str
@@ -394,15 +346,12 @@ class EvalOptions:
     on_indexed: CorpusHook | None = None
 
     def queries(self, dataset: BeirDataset, split: str) -> list[tuple[str, str]]:
-        """The split's queries, the first `limit` only when set (`make eval-quick`)."""
         queries = split_queries(dataset, split)
         return queries if self.limit is None else queries[: self.limit]
 
 
 @dataclass
 class EvalOutcome:
-    """Rows in report order plus what was indexed."""
-
     rows: list[Row]
     tenant: TenantId
     kept: bool
@@ -411,7 +360,6 @@ class EvalOutcome:
 
 
 def _chunkings(options: EvalOptions) -> list[ChunkingStrategyName]:
-    """Chunkings to index, shipped first (it warms the cache for the shipped-defaults run)."""
     wanted = {v.chunking for v in options.variants}
     first = [options.shipped.chunking] if options.shipped.chunking in wanted else []
     return first + sorted(wanted - set(first))
@@ -462,7 +410,6 @@ async def _baselines(
     vector_runs: Mapping[str, RunOutput],
     splits: Sequence[str],
 ) -> list[Row]:
-    """`bm25s` per split, and `bm25s` + vector RRF where the shipped vector row ran."""
     if not options.bm25:
         return []
     options.log("bm25s baseline")
@@ -525,7 +472,7 @@ async def _baselines(
 async def run_retrieval_eval(
     services: EvalServices, dataset: BeirDataset, options: EvalOptions
 ) -> EvalOutcome:
-    """Index, run every variant, add the baselines; delete the tenant unless `keep`."""
+    """Indexes the dataset, runs every variant and adds the baselines."""
     started = time.perf_counter()
     splits = list(dict.fromkeys(v.split for v in options.variants))
     queries = {s: options.queries(dataset, s) for s in splits}

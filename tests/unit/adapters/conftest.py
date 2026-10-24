@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared adapter test doubles: a tiny word-level tokenizer and a fake ONNX session."""
 
 from __future__ import annotations
 
@@ -18,7 +17,6 @@ HIDDEN = 4
 
 
 def build_tokenizer() -> Tokenizer:
-    """BERT-shaped tokenizer: `[CLS] a [SEP]` and `[CLS] a [SEP] b [SEP]` templates."""
     tok = Tokenizer(models.WordLevel(VOCAB, unk_token="[UNK]"))
     tok.pre_tokenizer = pre_tokenizers.Whitespace()
     tok.post_processor = processors.TemplateProcessing(
@@ -31,15 +29,12 @@ def build_tokenizer() -> Tokenizer:
 
 @pytest.fixture
 def tokenizer_file(tmp_path: Path) -> Path:
-    """`tokenizer.json` of the tiny tokenizer."""
     path = tmp_path / "tokenizer.json"
     build_tokenizer().save(str(path))
     return path
 
 
 class FakeSession:
-    """Looks up a fixed vector per token id; records every feed it receives."""
-
     def __init__(self, input_names: Sequence[str] = ("input_ids", "attention_mask")) -> None:
         rng = np.random.default_rng(7)
         self.table = rng.normal(size=(len(VOCAB), HIDDEN)).astype(np.float32)
@@ -55,8 +50,6 @@ class FakeSession:
 
 
 class LogitSession(FakeSession):
-    """Cross-encoder stand-in: logit = sum of the first vector component over real tokens."""
-
     def run(self, output_names: Any, input_feed: dict[str, Any]) -> list[Any]:
         self.feeds.append(input_feed)
         ids = input_feed["input_ids"]

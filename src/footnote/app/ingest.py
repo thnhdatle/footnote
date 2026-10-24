@@ -1,14 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ingest use case: parse → chunk → diff → embed → swap for one version.
-
-The upload transaction (API) stores the original and enqueues an `ingest` job; this
-service runs that job. It is idempotent: a version that is no longer `processing` is
-skipped, parsed elements are reused on retry, existing chunks (by content hash) and
-their vectors are reused, and only chunks lacking a vector of a needed space (the
-active one, plus the target while a re-embed runs) are embedded. New rows stay
-invisible until the swap transaction inserts the version's memberships and flips the
-current version, so a search never sees a half-indexed version.
-"""
+"""Ingest use case: parse, chunk, diff, embed and swap one version."""
 
 from __future__ import annotations
 
@@ -60,15 +51,12 @@ from footnote.observability import tracer
 
 VECTORS_MISSING = "vectors_missing"
 _MAX_ERROR_CHARS = 500
-# Errors a retry can fix: provider outages and races with a concurrent re-embed.
 _TRANSIENT = (UpstreamError, UnavailableError, ConflictError)
 
 type StageObserver = Callable[[str, float], None]
 
 
 class IngestStatus(StrEnum):
-    """What an ingest run did."""
-
     CURRENT = "current"
     SUPERSEDED = "superseded"
     SKIPPED = "skipped"
@@ -77,8 +65,6 @@ class IngestStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class IngestConfig:
-    """`ingest.*` / `embedding.*` options the use case needs."""
-
     gc_grace: timedelta = timedelta(minutes=10)
     retain_originals: bool = True
     batch_size: int = 64
@@ -87,8 +73,6 @@ class IngestConfig:
 
 @dataclass(frozen=True, slots=True)
 class IngestDeps:
-    """Ports used by ingestion; `tenants` (admin pool) enables the `max_chunks` quota."""
-
     collections: CollectionRepository
     documents: DocumentRepository
     index: IndexRepository
@@ -103,8 +87,6 @@ class IngestDeps:
 
 @dataclass(frozen=True, slots=True)
 class IngestTarget:
-    """The `ingest` job arguments."""
-
     collection_id: CollectionId
     document_id: DocumentId
     version_id: VersionId
@@ -112,8 +94,6 @@ class IngestTarget:
 
 @dataclass(frozen=True, slots=True)
 class IngestOutcome:
-    """Result of one run; `embedded` counts texts sent to embedders (all spaces)."""
-
     status: IngestStatus
     chunks: int = 0
     reused: int = 0
@@ -123,27 +103,22 @@ class IngestOutcome:
 
 
 class IngestFailedError(DomainError):
-    """The version failed for good (already recorded); the job must not be retried."""
-
     code = "ingest_failed"
 
 
 def error_body(exc: BaseException) -> dict[str, Any]:
-    """The `{code, message}` shown as a failed document's error."""
     if isinstance(exc, DomainError):
         return {"code": exc.code, "message": exc.message[:_MAX_ERROR_CHARS]}
     return {"code": "internal", "message": f"{type(exc).__name__}: {exc}"[:_MAX_ERROR_CHARS]}
 
 
 def is_transient(exc: BaseException) -> bool:
-    """Errors worth a retry; every other DomainError is a property of the input."""
     return isinstance(exc, _TRANSIENT) or not isinstance(exc, DomainError)
 
 
 def memberships_for(
     version_id: VersionId, drafts: Sequence[ChunkDraft], ids: dict[str, ChunkId]
 ) -> list[Membership]:
-    """One membership per draft (repeated passages share a chunk)."""
     return [
         Membership(version_id, d.ordinal, ids[d.content_hash], d.page_from, d.page_to)
         for d in drafts
@@ -151,7 +126,6 @@ def memberships_for(
 
 
 def page_count(elements: Sequence[Element]) -> int | None:
-    """Highest page any element touches (None for unpaged formats)."""
     pages = [p for e in elements for p in (e.page, e.page_to) if p is not None]
     return max(pages) if pages else None
 
@@ -184,12 +158,7 @@ class IngestService:
     async def ingest(
         self, tenant: TenantId, target: IngestTarget, *, last_attempt: bool = False
     ) -> IngestOutcome:
-        """Index one version; failures that a retry cannot fix fail the version for good.
-
-        Transient errors propagate for the queue to retry; on the `last_attempt` they also
-        fail the version. A version failed here raises IngestFailedError after recording
-        the error and enqueueing `document.failed`.
-        """
+        """Indexes one version."""
         with tracer().start_as_current_span("ingest document"):
             try:
                 version = await self._d.documents.version(tenant, target.version_id)
@@ -207,7 +176,7 @@ class IngestService:
                 error = error_body(exc)
                 try:
                     await self._fail(tenant, version, collection, error)
-                except NotFoundError:  # the document was deleted while it was indexed
+                except NotFoundError:
                     return IngestOutcome(IngestStatus.SKIPPED)
                 raise IngestFailedError(error["message"], code=error["code"]) from exc
 
@@ -246,7 +215,6 @@ class IngestService:
         )
 
     async def _elements(self, tenant: TenantId, version: VersionRecord) -> list[Element]:
-        """Stored elements (a retry or a reindex version) or a fresh parse of the original."""
         try:
             return await self._d.documents.elements(tenant, version.id)
         except NotFoundError:
@@ -285,7 +253,6 @@ class IngestService:
         collection: CollectionRecord,
         drafts: list[ChunkDraft],
     ) -> _Run:
-        """Diff against the document's stored hashes and insert only the new chunks."""
         hashes = sorted({d.content_hash for d in drafts})
         existing = await self._d.index.existing_chunks(tenant, target.document_id, hashes)
         diff = diff_hashes(existing, drafts)
@@ -304,7 +271,6 @@ class IngestService:
         return _Run(tenant, target, version, collection, drafts, ids, diff)
 
     async def _embed_missing(self, run: _Run) -> int:
-        """Embed chunks lacking a vector of a needed space; returns texts embedded."""
         texts = {run.ids[d.content_hash]: d.embedded_text for d in run.drafts}
         missing = await self._d.index.missing_vectors(run.tenant, run.collection.id, list(texts))
         embedded = 0
@@ -325,7 +291,6 @@ class IngestService:
         return embedded
 
     async def _swap(self, run: _Run) -> SwapResult:
-        """Swap; a re-embed that started meanwhile needs target vectors first (dual-write)."""
         doc = run.target.document_id
         gc = NewJob(JobKind.GC.value, {"document_id": str(doc)}, self._cfg.gc_grace)
         ready = self._d.webhooks.job_for(run.collection, WebhookEvent.DOCUMENT_READY, run.version)
@@ -353,7 +318,6 @@ class IngestService:
         return result
 
     async def _drop_original(self, tenant: TenantId, version: VersionRecord) -> None:
-        """`retain_originals: false`: the blob goes once the version is ready."""
         if not self._cfg.retain_originals and version.status in (
             VersionStatus.PROCESSING,
             VersionStatus.READY,
@@ -367,7 +331,7 @@ class IngestService:
         collection: CollectionRecord,
         error: dict[str, Any],
     ) -> None:
-        await self._d.documents.fail_version(tenant, version.id, error)  # NotFound if deleted
+        await self._d.documents.fail_version(tenant, version.id, error)
         await self._d.webhooks.notify(
             tenant, collection, WebhookEvent.DOCUMENT_FAILED, version, error=error
         )

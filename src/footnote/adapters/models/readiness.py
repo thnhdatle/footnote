@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Readiness of the local model files: present and SHA-256-verified.
-
-A file that verified once is not hashed again; files still missing or mismatched are
-re-checked on every probe, so `/readyz` turns ready after `footnote models pull` without a
-restart. Hashing runs in a worker thread under a lock (one verification at a time).
-"""
+"""Readiness of the local model files."""
 
 from __future__ import annotations
 
@@ -20,17 +15,10 @@ from footnote.adapters.models.verify import FileStatus, check_file, selected_fil
 
 @dataclass(frozen=True, slots=True)
 class ModelNeed:
-    """A manifest model the configuration uses and the file keys it needs.
-
-    Keys name plain files (`model`, `tokenizer`) or flattened variants (`int8-arm64`);
-    an empty `keys` means every plain file of the entry.
-    """
-
     entry: ModelEntry
     keys: tuple[str, ...] = field(default=())
 
     def files(self) -> dict[str, ModelFile]:
-        """The selected files by key (KeyError for a key the entry does not have)."""
         if not self.keys:
             return selected_files(self.entry)
         return {k: self.entry.files.get(k) or self.entry.variants[k] for k in self.keys}
@@ -45,7 +33,7 @@ class _Pending:
 
 
 class ModelReadiness:
-    """Readiness probe over the files of `needs` below `models_dir`."""
+    """Checks that the local model files are present and verified."""
 
     def __init__(self, models_dir: Path, needs: Sequence[ModelNeed]) -> None:
         self._pending = [
@@ -56,7 +44,6 @@ class ModelReadiness:
         self._lock = threading.Lock()
 
     def check(self) -> list[str]:
-        """Problems of the files not yet verified (synchronous; hashes files)."""
         with self._lock:
             problems: list[str] = []
             still: list[_Pending] = []
@@ -70,5 +57,4 @@ class ModelReadiness:
             return problems
 
     async def problems(self) -> list[str]:
-        """`check` in a worker thread (for `/readyz`)."""
         return await asyncio.to_thread(self.check)

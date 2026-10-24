@@ -1,13 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Initial schema: tables, indexes, RLS policies, definer functions and grants.
-
-Runs as footnote_admin, which owns schema footnote (deploy/sql/bootstrap.sql creates
-the roles, the schema and the vector extension). Tenant tables are isolated by row-level
-security on `tenant_id`.
-
-Revision ID: 0001
-Revises:
-"""
 
 from alembic import op
 
@@ -264,8 +255,6 @@ CREATE POLICY tenant_isolation ON footnote.{table} TO footnote_app
 CREATE POLICY admin_all ON footnote.{table} TO footnote_admin USING (true) WITH CHECK (true);
 """
 
-# tenants has no tenant_id column and footnote_app has no privileges on it; RLS is still
-# forced so that only the admin policy grants access.
 TENANTS_POLICY = """
 ALTER TABLE footnote.tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE footnote.tenants FORCE ROW LEVEL SECURITY;
@@ -448,16 +437,10 @@ GRANT SELECT ON footnote.embedding_spaces, footnote.alembic_version TO footnote_
 
 
 def _execute(script: str) -> None:
-    """Run a multi-statement script on the psycopg connection of the migration transaction.
-
-    No parameters are passed, so psycopg uses the simple query protocol (several
-    statements per call) and leaves `%` in plpgsql `format()` strings untouched.
-    """
     op.get_bind().connection.driver_connection.execute(script)
 
 
 def upgrade() -> None:
-    """Create the v0.1 schema."""
     _execute(TABLES)
     _execute(TENANTS_POLICY)
     for table in TENANT_TABLES:

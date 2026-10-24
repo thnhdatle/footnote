@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""UploadChecks: the UploadInspector adapter used by the upload API."""
 
 from __future__ import annotations
 

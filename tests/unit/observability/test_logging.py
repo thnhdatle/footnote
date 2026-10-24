@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""structlog setup: keys, redaction, levels, trace ids."""
 
 from __future__ import annotations
 

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the OpenAI-compatible chat client over an httpx mock transport."""
 
 from __future__ import annotations
 
@@ -28,8 +27,6 @@ def _completion(content: str, **message: Any) -> dict[str, Any]:
 
 
 class Harness:
-    """Builds a client over a scripted handler and records sleeps."""
-
     def __init__(self, handler: Handler, **config: Any) -> None:
         self.requests: list[httpx.Request] = []
         self.sleeps: list[float] = []
@@ -118,7 +115,7 @@ async def test_retries_retryable_status_with_jittered_backoff(status: int) -> No
     h = Harness(lambda _r: next(calls), max_retries=2, backoff_base=1.0, backoff_cap=8.0)
     result = await h.llm.chat(MESSAGES)
     assert result.text == "fine"
-    assert h.sleeps == [0.5, 1.0]  # rand 0.5 * min(cap, base * 2**(attempt-1))
+    assert h.sleeps == [0.5, 1.0]
 
 
 async def test_retry_after_header_is_honoured_and_capped() -> None:

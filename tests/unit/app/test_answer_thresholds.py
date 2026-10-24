@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Evidence-threshold precedence on the answer gate, per gate kind."""
 
 from __future__ import annotations
 

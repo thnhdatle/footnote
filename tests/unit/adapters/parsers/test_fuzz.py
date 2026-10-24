@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Hypothesis: text parsers never raise and never lose text outside stripped tags."""
 
 from __future__ import annotations
 

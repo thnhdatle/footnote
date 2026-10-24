@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Retrieval and abstention metrics (pure, stdlib only; pytrec_eval-compatible definitions)."""
+"""Retrieval and abstention metrics."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ _PERCENT = 100.0
 
 
 def recall_at_k(ranked: Sequence[str], qrels: Mapping[str, int], k: int) -> float:
-    """Share of relevant documents (grade > 0) found in the top k; 0.0 without any."""
     relevant = sum(1 for rel in qrels.values() if rel > 0)
     if relevant == 0:
         return 0.0
@@ -29,7 +28,6 @@ def _dcg(gains: Sequence[int]) -> float:
 
 
 def ndcg_at_k(ranked: Sequence[str], qrels: Mapping[str, int], k: int) -> float:
-    """Normalised DCG at k with linear gain (pytrec_eval `ndcg_cut`); 0.0 when IDCG is 0."""
     ideal = sorted((rel for rel in qrels.values() if rel > 0), reverse=True)
     idcg = _dcg(ideal[:k])
     if idcg == 0.0:
@@ -39,7 +37,6 @@ def ndcg_at_k(ranked: Sequence[str], qrels: Mapping[str, int], k: int) -> float:
 
 
 def mrr_at_k(ranked: Sequence[str], qrels: Mapping[str, int], k: int) -> float:
-    """Reciprocal rank of the first relevant document within the top k, else 0.0."""
     for rank, doc in enumerate(ranked[:k], start=1):
         if qrels.get(doc, 0) > 0:
             return 1.0 / rank
@@ -47,14 +44,12 @@ def mrr_at_k(ranked: Sequence[str], qrels: Mapping[str, int], k: int) -> float:
 
 
 def mean(values: Sequence[float]) -> float:
-    """Arithmetic mean; ValueError on empty input."""
     if not values:
         raise ValueError("values must not be empty")
     return math.fsum(values) / len(values)
 
 
 def percentile(values: Sequence[float], p: float) -> float:
-    """Percentile `p` in [0, 100] with linear interpolation (numpy `method="linear"`)."""
     if not values:
         raise ValueError("values must not be empty")
     if not 0.0 <= p <= _PERCENT:
@@ -68,7 +63,6 @@ def percentile(values: Sequence[float], p: float) -> float:
 
 
 def roc_auc(positive: Sequence[float], negative: Sequence[float]) -> float:
-    """P(positive > negative) + 0.5 P(tie), computed in O(n log n)."""
     if not positive or not negative:
         raise ValueError("positive and negative scores must not be empty")
     ordered = sorted(negative)
@@ -83,8 +77,6 @@ def roc_auc(positive: Sequence[float], negative: Sequence[float]) -> float:
 
 @dataclass(frozen=True)
 class CurvePoint:
-    """Answer and abstain rates at one gate threshold."""
-
     threshold: float
     answer_rate: float
     abstain_rate: float
@@ -93,7 +85,6 @@ class CurvePoint:
 def rates_at(
     answerable: Sequence[float], unanswerable: Sequence[float], threshold: float
 ) -> CurvePoint:
-    """Answer rate on answerable scores and abstain rate on unanswerable scores."""
     answered = sum(1 for s in answerable if s >= threshold)
     abstained = sum(1 for s in unanswerable if s < threshold)
     return CurvePoint(
@@ -106,14 +97,11 @@ def rates_at(
 def abstention_curve(
     answerable: Sequence[float], unanswerable: Sequence[float]
 ) -> list[CurvePoint]:
-    """Rates at thresholds 0.00, 0.01, ..., 1.00 (101 points)."""
     return [rates_at(answerable, unanswerable, i / _CURVE_STEPS) for i in range(_CURVE_STEPS + 1)]
 
 
 @dataclass(frozen=True)
 class RetrievalMetrics:
-    """Mean retrieval metrics over a query set."""
-
     recall_at_1: float
     recall_at_5: float
     recall_at_10: float
@@ -122,7 +110,6 @@ class RetrievalMetrics:
     mrr_at_10: float
 
     def as_dict(self) -> dict[str, float]:
-        """Metric name to value."""
         return {
             "recall_at_1": self.recall_at_1,
             "recall_at_5": self.recall_at_5,
@@ -136,7 +123,7 @@ class RetrievalMetrics:
 def evaluate_run(
     run: Mapping[str, Sequence[str]], qrels: Mapping[str, Mapping[str, int]]
 ) -> dict[str, float]:
-    """Average metrics over the qids in `qrels`; a qid missing from `run` scores 0."""
+    """Averages the metrics over the queries in the qrels."""
     if not qrels:
         raise ValueError("qrels must not be empty")
     rankings = {qid: run.get(qid, []) for qid in qrels}

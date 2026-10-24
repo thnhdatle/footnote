@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Evaluation embedding cache."""
 
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ class Inner:
 
     @staticmethod
     def vec(text: str) -> list[float]:
-        return [len(text) / 3.0, 0.1, 1e-9 * len(text)]  # float64 values not exact in float32
+        return [len(text) / 3.0, 0.1, 1e-9 * len(text)]
 
     async def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         self.doc_calls.append(list(texts))
@@ -62,7 +61,7 @@ async def test_cached_and_uncached_results_are_identical(tmp_path: Path) -> None
     hit = await warm.embed_documents(texts)
     assert inner.doc_calls == []
     assert hit == miss
-    assert miss[0] != Inner.vec(texts[0])  # float32-rounded, not the raw float64
+    assert miss[0] != Inner.vec(texts[0])
     warm.close()
 
 
@@ -101,7 +100,7 @@ def test_cache_keys() -> None:
 async def test_warm_markers(tmp_path: Path) -> None:
     assert not is_warm(tmp_path, "scifact")
     mark_warm(tmp_path, "scifact", "k", 5)
-    assert not is_warm(tmp_path, "scifact")  # sqlite file missing
+    assert not is_warm(tmp_path, "scifact")
     CachingEmbedder(Inner(), tmp_path, "k").close()
     assert is_warm(tmp_path, "scifact")
     assert cache_path(tmp_path, "k").is_file()
@@ -117,7 +116,7 @@ async def test_queries_bypass_the_cache_when_disabled(tmp_path: Path) -> None:
     assert inner.query_calls == ["q", "q"]
     assert first == second
     cached = CachingEmbedder(Inner(), tmp_path / "other", "k")
-    assert await cached.embed_query("q") == first  # same float32 rounding either way
+    assert await cached.embed_query("q") == first
     assert await cache.embed_documents(["d"]) == await cache.embed_documents(["d"])
     assert len(inner.doc_calls) == 1
     cache.close()

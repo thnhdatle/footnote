@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit and property tests for the citation verifier."""
 
 from __future__ import annotations
 
@@ -42,9 +41,6 @@ def sentences(text: str) -> list[str]:
     return [text[s.start : s.end] for s in split_sentences(text)]
 
 
-# --- strip_reasoning ---------------------------------------------------------------------
-
-
 def test_strip_reasoning_removes_think_block() -> None:
     assert strip_reasoning("<think>hmm</think>\n\nAnswer.") == "Answer."
 
@@ -63,9 +59,6 @@ def test_strip_reasoning_leaves_later_think_alone() -> None:
 
 def test_strip_reasoning_only_first_block() -> None:
     assert strip_reasoning("<think>a</think>X<think>b</think>") == "X<think>b</think>"
-
-
-# --- split_sentences ---------------------------------------------------------------------
 
 
 def test_split_sentences_basic() -> None:
@@ -154,9 +147,6 @@ def test_split_sentences_numbered_item_keeps_number() -> None:
     assert sentences("In 2020. Next") == ["In 2020.", "Next"]
 
 
-# --- find_markers / MARKER_RE ------------------------------------------------------------
-
-
 def test_find_markers_basic() -> None:
     assert find_markers("a [1] b [2, 3] c [1]") == [1, 2, 3, 1]
 
@@ -170,9 +160,6 @@ def test_marker_re_rejects_long_numbers_and_empty() -> None:
     assert MARKER_RE.search("[1234] [] [a]") is None
     assert MARKER_RE.search("[12 , 3456]") is None
     assert MARKER_RE.fullmatch("[12 , 34]") is not None
-
-
-# --- verify: marker cleanup --------------------------------------------------------------
 
 
 def test_verify_valid_markers_kept() -> None:
@@ -329,9 +316,6 @@ def test_verify_see_marker_boundary(n: int) -> None:
         assert result.invalid_removed == 1
 
 
-# --- verify: citations -------------------------------------------------------------------
-
-
 def test_verify_citation_fields_from_hit() -> None:
     first = make_hit(title="First", page=3)
     second = make_hit(title="Second", page=None)
@@ -421,8 +405,6 @@ def test_verify_marker_in_code_never_cited() -> None:
     result = verify("`[1]` only", hits(1))
     assert result.unsupported is True
 
-
-# --- properties --------------------------------------------------------------------------
 
 _words = st.sampled_from(["alpha", "beta", "gamma.", "delta,", "Dr.", "e.g.", "3.5", "x"])
 _numbers = st.integers(min_value=0, max_value=150)

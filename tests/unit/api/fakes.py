@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fakes of the admin-pool and edge ports the API needs, over the app-layer FakeDb."""
 
 from __future__ import annotations
 
@@ -41,8 +40,6 @@ from tests.unit.app.fakes import EPOCH, FakeDb, FakeSearchStore, FakeSpaces, Fak
 
 
 class FakeKeys:
-    """KeyResolver over an in-memory key table (`revoked`/`expired` keys are unknown)."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
         self.keys: dict[str, ApiKeyRecord] = {}
@@ -70,8 +67,6 @@ class FakeKeys:
 
 
 class FakeTenantAdmin(FakeTenants):
-    """TenantAdmin over FakeDb and FakeKeys."""
-
     def __init__(self, db: FakeDb, keys: FakeKeys) -> None:
         super().__init__(db)
         self.keys = keys
@@ -147,8 +142,6 @@ class FakeTenantAdmin(FakeTenants):
 
 
 class FakeSpaceRegistry(FakeSpaces):
-    """SpaceRegistry over FakeDb (limit 8, in-use check)."""
-
     max_spaces = 8
 
     async def register(self, spec: SpaceSpec) -> EmbeddingSpace:
@@ -182,8 +175,6 @@ class FakeSpaceRegistry(FakeSpaces):
 
 
 class FakeExporter:
-    """TenantExporter yielding the tenant and its collections."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
         self.closed = 0
@@ -208,8 +199,6 @@ class FakeExporter:
 
 
 class FakeResolver:
-    """HostResolver with a fixed table; unknown hosts do not resolve."""
-
     def __init__(self, table: dict[str, list[str]] | None = None) -> None:
         self.table = table if table is not None else {"hooks.example.com": ["93.184.216.34"]}
 
@@ -218,9 +207,6 @@ class FakeResolver:
 
 
 class FakeInspector:
-    """UploadInspector: `%PDF-` → pdf (`ENCRYPTED` inside → pdf_encrypted), NUL → 415,
-    `.md` → markdown, else text."""
-
     async def inspect(self, data: bytes, filename: str) -> InspectedFile:
         if data.startswith(b"%PDF-"):
             if b"ENCRYPTED" in data:
@@ -234,8 +220,6 @@ class FakeInspector:
 
 
 class FakeChunkReader:
-    """ChunkReader over FakeDb (current-version memberships only)."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
 
@@ -272,8 +256,6 @@ class FakeChunkReader:
 
 
 class FakeDeliveries:
-    """WebhookDeliveryLog listing preset records per (tenant, collection)."""
-
     def __init__(self) -> None:
         self.records: dict[tuple[TenantId, CollectionId], list[DeliveryRecord]] = {}
 
@@ -290,8 +272,6 @@ class FakeDeliveries:
 
 
 class TenantSearchStore(FakeSearchStore):
-    """FakeSearchStore that, like RLS, hides collections the tenant does not own."""
-
     def __init__(self, db: FakeDb, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
         self.db = db

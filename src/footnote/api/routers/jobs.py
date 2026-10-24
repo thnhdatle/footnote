@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`GET /v1/jobs/{job_id}`: tenant-scoped; another tenant's id is 404."""
+"""Job route."""
 
 from __future__ import annotations
 

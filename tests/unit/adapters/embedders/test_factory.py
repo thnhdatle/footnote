@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""DefaultEmbedderFactory picks the adapter by provider and caches per space."""
 
 from __future__ import annotations
 

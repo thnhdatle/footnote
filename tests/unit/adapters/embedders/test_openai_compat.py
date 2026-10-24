@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""OpenAICompatEmbedder against an httpx mock transport (the fakellm wire shape)."""
 
 from __future__ import annotations
 
@@ -59,7 +58,7 @@ async def test_posts_to_embeddings_with_headers_and_order() -> None:
     body = json.loads(request.content)
     assert body == {"model": "m", "input": ["a", "bbb"]}
     assert [round(math.hypot(*v), 6) for v in out] == [1.0, 1.0]
-    assert out[1][0] > out[0][0]  # response was reversed; order restored by index
+    assert out[1][0] > out[0][0]
 
 
 async def test_sends_dimensions_when_asked() -> None:
@@ -101,7 +100,7 @@ async def test_retries_429_honouring_retry_after_then_succeeds() -> None:
     rig = Rig(handler)
     assert len(await rig.embedder.embed_documents(["a"])) == 1
     assert calls == 3
-    assert rig.sleeps == [1.0, 1.0]  # backoff 0.25 and 0.5 are below Retry-After
+    assert rig.sleeps == [1.0, 1.0]
 
 
 async def test_retry_after_is_capped_and_garbage_ignored() -> None:

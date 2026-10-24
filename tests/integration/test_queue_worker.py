@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The queue worker against real Postgres: claim, retry, lease loss, shutdown, no double runs."""
 
 from __future__ import annotations
 
@@ -25,7 +24,6 @@ KIND = "reindex"
 
 @pytest_asyncio.fixture
 async def world(admin_db: Database, app_db: Database) -> AsyncIterator[World]:
-    """A tenant whose jobs the tests enqueue."""
     yield await seed(admin_db, app_db, f"q-{uuid.uuid4().hex[:8]}", ["queue test text"])
 
 
@@ -43,8 +41,6 @@ async def _wait_status(jobs: PgJobs, world: World, job_id: JobId, status: str) -
 
 
 class Running:
-    """A worker run in the background until `stop`."""
-
     def __init__(self, worker: Worker) -> None:
         self.stop_event = asyncio.Event()
         self.task = asyncio.create_task(worker.run(self.stop_event))
@@ -156,7 +152,6 @@ async def test_future_jobs_wait_for_run_at(app_db: Database, world: World) -> No
 async def test_expired_lease_is_reclaimed_after_a_crash(app_db: Database, world: World) -> None:
     jobs = PgJobs(app_db)
     job_id = await jobs.enqueue(world.tenant, NewJob(KIND))
-    # a "crashed" worker claimed the job with a tiny lease and never came back
     claimed = {c.id for c in await jobs.claim("w-crashed", 1000, timedelta(milliseconds=200))}
     assert job_id in claimed
 
@@ -193,7 +188,7 @@ async def test_lease_is_renewed_so_a_slow_job_is_not_stolen(app_db: Database, wo
         await asyncio.wait_for(started.wait(), 20)
         second = Running(_worker(app_db, {KIND: other}, "w-thief", lease=timedelta(seconds=1)))
         try:
-            await asyncio.sleep(2.5)  # more than two lease periods; renewal must keep it ours
+            await asyncio.sleep(2.5)
             assert (await _record(jobs, world, job_id)).status == "running"
             assert runs == 1
         finally:

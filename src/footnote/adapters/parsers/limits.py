@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Parser limits and the pre-parse checks that enforce them (`ingest.*`)."""
+"""Parser limits and the checks that enforce them before parsing."""
 
 from __future__ import annotations
 
@@ -22,8 +22,6 @@ _CHUNK = 64 * 1024
 
 @dataclass(frozen=True, slots=True)
 class ParseLimits:
-    """Defaults mirror the `ingest:` block of the reference configuration."""
-
     max_pages: int = 2000
     max_uncompressed_bytes: int = 200 * _MIB
     max_archive_members: int = 10000
@@ -31,7 +29,6 @@ class ParseLimits:
 
 
 def check_pdf(data: bytes, limits: ParseLimits) -> int:
-    """Return the page count; raise for encrypted PDFs and PDFs over `max_pages`."""
     from pypdf import PdfReader  # noqa: PLC0415 (heavy import, parse path only)
     from pypdf.errors import PyPdfError  # noqa: PLC0415
 
@@ -50,7 +47,6 @@ def check_pdf(data: bytes, limits: ParseLimits) -> int:
 
 
 def check_docx(data: bytes, limits: ParseLimits) -> None:
-    """Enforce member and size limits on the declared sizes and again while reading."""
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
@@ -84,7 +80,7 @@ def check_docx(data: bytes, limits: ParseLimits) -> None:
 
 
 def precheck(media_type: str, data: bytes, limits: ParseLimits) -> None:
-    """Synchronous upload checks: encrypted PDF, page count, archive limits."""
+    """Runs the synchronous upload checks."""
     if media_type == PDF:
         check_pdf(data, limits)
     elif media_type == DOCX:

@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""In-process `bm25s` baseline: BM25 over the BEIR corpus, documents ranked
-directly (no chunking), English stopwords and the Snowball English stemmer (PyStemmer).
-
-Needs the `eval` extra (`bm25s`, `PyStemmer`); `MissingExtraError` names it otherwise.
-"""
+"""In-process BM25 baseline over the BEIR corpus."""
 
 from __future__ import annotations
 
@@ -17,8 +13,7 @@ from footnote.app.evaluation.datasets import CorpusDoc
 EXTRA_HINT = "install the eval extra: uv sync --extra eval (bm25s, PyStemmer)"
 
 
-class MissingExtraError(RuntimeError):
-    """The `eval` optional dependencies are not installed."""
+class MissingExtraError(RuntimeError): ...
 
 
 def _modules() -> tuple[Any, Any]:
@@ -31,25 +26,21 @@ def _modules() -> tuple[Any, Any]:
 
 
 def require_extra() -> None:
-    """Raise MissingExtraError unless `bm25s` and `PyStemmer` import."""
     _modules()
 
 
 def document_text(doc: CorpusDoc) -> str:
-    """Indexed text of a corpus document: title and text."""
     return f"{doc.title}\n{doc.text}" if doc.title else doc.text
 
 
 @dataclass(frozen=True)
 class Bm25Run:
-    """Ranked document ids and the in-process retrieval latency (seconds) per query."""
-
     rankings: dict[str, list[str]]
     seconds: dict[str, float]
 
 
 class Bm25Index:
-    """A `bm25s` (Lucene BM25, k1 1.5, b 0.75) index over a corpus."""
+    """A BM25 index over a corpus."""
 
     def __init__(self, corpus: Mapping[str, CorpusDoc]) -> None:
         bm25s, stemmer_mod = _modules()
@@ -66,7 +57,6 @@ class Bm25Index:
         self._retriever.index(tokens, show_progress=False)
 
     def search(self, query: str, k: int = 100) -> list[str]:
-        """Document ids with a positive score, best first, at most `k`."""
         tokens = self._bm25s.tokenize(
             [query],
             stopwords="en",
@@ -89,7 +79,6 @@ class Bm25Index:
         k: int = 100,
         clock: Callable[[], float] = time.perf_counter,
     ) -> Bm25Run:
-        """Rank every query (one at a time, so each latency is a single query's)."""
         rankings: dict[str, list[str]] = {}
         seconds: dict[str, float] = {}
         for qid, text in queries.items():
@@ -102,8 +91,6 @@ class Bm25Index:
 def fuse_rankings(
     legs: Sequence[tuple[Sequence[str], float]], rrf_k: int = 60, tiebreak: Sequence[str] = ()
 ) -> list[str]:
-    """Weighted RRF of document rankings (`(ranking, weight)` per leg). Ties break on the
-    position in `tiebreak` (documents absent from it last), then document id."""
     totals: dict[str, float] = {}
     for ranking, weight in legs:
         seen: set[str] = set()

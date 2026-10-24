@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ingest use case over the repository fakes: incremental indexing, swap, failures."""
 
 from __future__ import annotations
 
@@ -60,7 +59,6 @@ async def test_ingest_indexes_a_new_document() -> None:
     assert version.status is VersionStatus.READY
     assert version.pages == 3
     assert rig.db.col(rig.tenant, rig.collection.id).chunk_count == 3
-    # Batches of 2 against the active space only.
     assert [len(ts) for _, ts in rig.embedders.calls] == [2, 1]
     assert {s for s, _ in rig.embedders.calls} == {SPACE_A.id}
     gc = rig.db.jobs_of(rig.tenant, "gc")
@@ -93,7 +91,6 @@ async def test_new_version_with_same_chunks_embeds_nothing() -> None:
     rig = build()
     await rig.index_texts(P[:3])
     rig.embedders.calls.clear()
-    # Different bytes (extra blank lines), same paragraphs: a new version, all hashes reused.
     data_texts = [P[0], "", P[1], P[2]]
     up = await rig.upload(data_texts)
     outcome = await rig.ingest.ingest(rig.tenant, rig.target(up))
@@ -146,12 +143,9 @@ async def test_property_incremental_embedding_and_swap(versions: list[list[int]]
             continue
         outcome = await rig.ingest.ingest(rig.tenant, rig.target(up))
         distinct = set(texts)
-        # Diff: reused + new partition the version's distinct hashes.
         assert outcome.reused + outcome.new == len(distinct)
-        # Exactly the texts never stored for this document are embedded (no GC ran).
         assert outcome.embedded == len(distinct - seen)
         seen |= distinct
-        # The swap made exactly this version current, and every current chunk is searchable.
         assert rig.current_texts() == distinct
         assert set(rig.db.search_view(rig.tenant, rig.collection.id)) == rig.db.current_chunks(
             rig.tenant, rig.collection.id
@@ -171,7 +165,6 @@ async def test_older_version_finishing_late_is_superseded() -> None:
     doc = await rig.documents.get(rig.tenant, rig.collection.id, v1.document_id)
     assert doc.status is DocumentStatus.READY
     assert doc.current_version == 2
-    # Only the current version announces document.ready.
     assert [h["version"] for h in _webhook_jobs(rig)] == [2]
     assert len(rig.db.jobs_of(rig.tenant, "gc")) == 2
 
@@ -249,7 +242,7 @@ async def test_transient_embed_failure_is_retried_without_reparsing() -> None:
     outcome = await rig.ingest.ingest(rig.tenant, rig.target(up))
     assert outcome.status is IngestStatus.CURRENT
     assert rig.parser.calls == 1
-    assert outcome.reused == 3  # chunks inserted by the failed attempt are reused
+    assert outcome.reused == 3
 
 
 async def test_transient_failure_on_last_attempt_fails_the_version() -> None:
@@ -287,7 +280,6 @@ async def test_wrong_vector_count_is_an_upstream_error() -> None:
 async def test_chunk_quota_fails_the_document() -> None:
     rig = build(quotas=Quotas(max_chunks=3))
     await rig.index_texts(P[:3])
-    # Replacing the document's own 3 chunks by 3 others fits the quota.
     await rig.index_texts(P[3:6])
     assert rig.current_texts() == set(P[3:6])
 

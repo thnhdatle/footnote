@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tenant export (`GET /v1/admin/tenants/{id}/export`) over the admin pool.
-
-One `REPEATABLE READ READ ONLY` transaction streams every table of the tenant through
-server-side cursors, in dependency order: tenant, collections (webhook secrets
-omitted), documents, versions (originals base64 on request), elements, chunks,
-memberships and, on request, vectors.
-"""
+"""Tenant export."""
 
 from __future__ import annotations
 
@@ -87,7 +81,7 @@ def _vector(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class PgTenantExport:
-    """Streams a tenant's rows as `ExportRecord`s (admin pool)."""
+    """Streams the rows of a tenant as export records."""
 
     def __init__(self, admin: Database) -> None:
         self._db = admin
@@ -95,7 +89,6 @@ class PgTenantExport:
     async def export(
         self, tenant: TenantId, *, include_vectors: bool, include_originals: bool
     ) -> AsyncIterator[ExportRecord]:
-        """Records in dependency order; NotFoundError before the first one when absent."""
         steps: list[tuple[str, str, Shape]] = [
             ("collection", _COLLECTIONS, _same),
             ("document", _DOCUMENTS, _same),

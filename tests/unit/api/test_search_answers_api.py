@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Search and answers API: hits, filters, debug, abstention, SSE streaming and metrics."""
 
 from __future__ import annotations
 
@@ -57,9 +56,6 @@ def sse_events(response: httpx.Response) -> list[tuple[str, Any]]:
             (event_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: ")))
         )
     return events
-
-
-# -- search ------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("mode", [None, "hybrid", "lexical", "vector"])
@@ -161,9 +157,6 @@ async def test_search_records_metrics_with_the_route_template(rig: ApiRig) -> No
     assert str(rig.collection_a.id) not in text
 
 
-# -- answers -----------------------------------------------------------------
-
-
 async def test_answer_returns_text_citations_and_usage(rig: ApiRig) -> None:
     r = await rig.client.post(answers_url(rig), headers=rig.auth(), json={"question": "beta gamma"})
     assert r.status_code == 200
@@ -236,9 +229,6 @@ async def test_answer_unknown_collection_is_not_found(rig: ApiRig, stream: bool)
     )
     assert r.status_code == 404
     assert error_of(r)["code"] == "not_found"
-
-
-# -- streaming ---------------------------------------------------------------
 
 
 async def test_stream_emits_events_in_order(rig: ApiRig) -> None:

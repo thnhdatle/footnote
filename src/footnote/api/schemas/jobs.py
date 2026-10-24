@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Job status model."""
+"""Schemas of the job route."""
 
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ class JobOut(BaseModel):
 
     @classmethod
     def of(cls, j: JobRecord) -> JobOut:
-        """Build from the domain record (arguments are not shown)."""
         return cls(
             id=j.id,
             kind=j.kind,

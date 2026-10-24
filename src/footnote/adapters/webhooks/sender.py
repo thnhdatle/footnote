@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Signed webhook POST with the webhook SSRF policy.
-
-The host is resolved here, every address is vetted by `domain.netpolicy`, and the
-request goes to the first checked address (no re-resolution) with Host and TLS SNI taken
-from the URL. Redirects are not followed, the whole exchange is bounded by
-`WebhookConfig.timeout` and at most 1 KiB of the response body is read.
-"""
+"""Signed webhook POST with SSRF protection."""
 
 from __future__ import annotations
 
@@ -28,7 +22,6 @@ type Resolver = Callable[[str, int], Awaitable[Sequence[str]]]
 
 
 async def system_resolver(host: str, port: int) -> Sequence[str]:
-    """Resolve `host` with the system resolver (A and AAAA, order preserved, deduplicated)."""
     infos = await asyncio.get_running_loop().getaddrinfo(
         host, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
     )
@@ -36,10 +29,7 @@ async def system_resolver(host: str, port: int) -> Sequence[str]:
 
 
 class SystemHostResolver:
-    """`HostResolver` port over the system resolver; unresolvable hosts give no address."""
-
     async def resolve(self, host: str, port: int) -> Sequence[str]:
-        """Addresses of `host` (empty when resolution fails)."""
         try:
             return await system_resolver(host, port)
         except (OSError, UnicodeError):
@@ -48,8 +38,6 @@ class SystemHostResolver:
 
 @dataclass(frozen=True, slots=True)
 class WebhookConfig:
-    """`webhooks.*` settings used by the sender."""
-
     allow_http: bool = False
     allow_private: bool = False
     timeout: float = 5.0
@@ -58,8 +46,6 @@ class WebhookConfig:
 
 @dataclass(frozen=True, slots=True)
 class DeliveryResult:
-    """Outcome of one attempt; `permanent` marks failures a retry cannot fix (policy)."""
-
     delivered: bool
     status_code: int | None = None
     error: str | None = None
@@ -77,7 +63,7 @@ def _ip_url(target: WebhookTarget, address: str) -> str:
 
 
 class WebhookSender:
-    """Delivers one signed payload per `send` call."""
+    """Delivers signed webhook payloads."""
 
     def __init__(
         self,
@@ -91,11 +77,10 @@ class WebhookSender:
 
     @property
     def max_attempts(self) -> int:
-        """Delivery attempts before a webhook job fails for good."""
         return self._cfg.max_attempts
 
     async def send(self, url: str, secret: bytes, body: bytes, timestamp: int) -> DeliveryResult:
-        """POST `body` to `url`; 2xx is delivered. Never raises for delivery problems."""
+        """Posts a body to a URL and returns the delivery result."""
         try:
             target = parse_webhook_url(url, allow_http=self._cfg.allow_http)
             address = await self._resolve(target)
@@ -129,7 +114,7 @@ class WebhookSender:
                 "X-Footnote-Timestamp": str(timestamp),
                 "X-Footnote-Signature": sign(secret, timestamp, body),
                 "User-Agent": "footnote-webhook/1",
-                "Accept-Encoding": "identity",  # the 1 KiB read limit applies to wire bytes
+                "Accept-Encoding": "identity",
             },
             extensions={"sni_hostname": target.host},
         )

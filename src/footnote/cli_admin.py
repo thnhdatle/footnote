@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Admin CLI groups: `tenants create|list|delete|export`, `keys create|list|revoke|
-rotate`, `spaces register|list`.
-
-They run the same `AdminService` as `/v1/admin` over the admin pool
-(`FOOTNOTE_ADMIN_DATABASE_URL`) and print the admin API's JSON shapes, one document per
-line (`tenants export` prints the NDJSON stream of `GET /v1/admin/tenants/{id}/export`).
-"""
+"""Admin commands for tenants, keys and embedding spaces."""
 
 from __future__ import annotations
 
@@ -45,7 +39,6 @@ def _emit(value: BaseModel | dict[str, Any]) -> None:
 
 
 def run_admin[T](ctx: typer.Context, action: Callable[[AdminService], Awaitable[T]]) -> T:
-    """Run `action` with an AdminService over the admin pool; map failures to exit codes."""
     from footnote.bootstrap import open_admin  # noqa: PLC0415 - heavy import
 
     settings = settings_from(ctx)
@@ -62,9 +55,6 @@ def run_admin[T](ctx: typer.Context, action: Callable[[AdminService], Awaitable[
         raise fail(f"{exc.code}: {exc.message}", EXIT_FAILURE) from exc
     except Exception as exc:
         raise fail(f"{type(exc).__name__}: {exc}") from exc
-
-
-# --- tenants ----------------------------------------------------------------------------
 
 
 @tenants_app.command("create")
@@ -128,9 +118,6 @@ def tenants_export(
     run_admin(ctx, action)
 
 
-# --- keys -------------------------------------------------------------------------------
-
-
 @keys_app.command("create")
 def keys_create(
     ctx: typer.Context,
@@ -179,9 +166,6 @@ def keys_rotate(ctx: typer.Context, tenant_id: TenantArg, key_id: KeyArg) -> Non
 
     issued = run_admin(ctx, lambda admin: admin.rotate_key(TenantId(tenant_id), key_id))
     _emit(IssuedKeyOut.of_issued(issued))
-
-
-# --- spaces -----------------------------------------------------------------------------
 
 
 @spaces_app.command("register")

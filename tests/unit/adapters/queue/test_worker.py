@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the queue worker over an in-memory job store."""
 
 from __future__ import annotations
 
@@ -34,8 +33,6 @@ class FakeJob:
 
 @dataclass
 class FakeStore:
-    """In-memory `JobStore`; `owner` decides who may update a running job."""
-
     jobs: dict[JobId, FakeJob] = field(default_factory=dict)
     claim_calls: list[int] = field(default_factory=list)
     owned: bool = True
@@ -88,7 +85,7 @@ class FakeStore:
         job.last_error = error
         job.retry_in = retry_in
         job.status = "failed" if retry_in is None else "queued"
-        job.held = retry_in is not None and retry_in > timedelta(0)  # run_at in the future
+        job.held = retry_in is not None and retry_in > timedelta(0)
         return True
 
 
@@ -133,7 +130,6 @@ async def test_failure_requeues_with_jittered_backoff() -> None:
     async def handler(ctx: JobContext) -> None:
         raise ValueError("boom")
 
-    # first attempt: rand=1.0 * min(cap, base * 2**0) = 2.0 s, and the job is not due yet
     async with running(store, {"k": handler}, backoff_base=2.0):
         await eventually(lambda: job.last_error is not None)
     assert job.last_error == "ValueError: boom"
@@ -217,7 +213,7 @@ async def test_lost_lease_cancels_the_handler() -> None:
 
     async with running(store, {"k": handler}, lease=timedelta(milliseconds=30)):
         await asyncio.wait_for(cancelled.wait(), 5)
-    assert job.status == "running"  # the new owner decides; this worker records nothing
+    assert job.status == "running"
 
 
 async def test_concurrency_is_bounded_and_claims_only_free_slots() -> None:
@@ -273,7 +269,7 @@ async def test_graceful_shutdown_waits_for_running_jobs() -> None:
     task = asyncio.create_task(worker.run(stop))
     await asyncio.wait_for(started.wait(), 5)
     stop.set()
-    await asyncio.sleep(0.05)  # shutdown must still be waiting on the job
+    await asyncio.sleep(0.05)
     assert not task.done()
     release.set()
     await asyncio.wait_for(task, 5)
@@ -303,7 +299,7 @@ async def test_shutdown_timeout_cancels_and_leaves_the_lease() -> None:
     stop.set()
     await asyncio.wait_for(task, 5)
     assert cancelled.is_set()
-    assert job.status == "running"  # lease expiry hands it to another worker
+    assert job.status == "running"
 
 
 def test_renew_interval_is_a_third_of_the_lease() -> None:

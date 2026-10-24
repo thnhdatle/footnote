@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""In-memory fakes of the application ports for use-case unit tests."""
 
 from __future__ import annotations
 
@@ -58,13 +57,10 @@ _WORD = re.compile(r"\w+")
 
 
 def words(text: str) -> set[str]:
-    """Lowercase word set of a text."""
     return {w.lower() for w in _WORD.findall(text)}
 
 
 class FakeClock:
-    """Manual monotonic clock advancing by a fixed step on every call."""
-
     def __init__(self, step: float = 0.5) -> None:
         self.step = step
         self._t = 0.0
@@ -78,14 +74,11 @@ class FakeClock:
 
 
 def hash_vector(text: str) -> list[float]:
-    """Deterministic vector derived from sha256 of the text."""
     digest = hashlib.sha256(text.encode()).digest()
     return [(b - 127.5) / 127.5 for b in digest[:DIMS]]
 
 
 class FakeEmbedder:
-    """Deterministic embedder that records its calls."""
-
     def __init__(self) -> None:
         self.document_calls: list[list[str]] = []
         self.query_calls: list[str] = []
@@ -100,8 +93,6 @@ class FakeEmbedder:
 
 
 class FakeEmbedderFactory:
-    """Serves one FakeEmbedder for every space."""
-
     def __init__(self, embedder: FakeEmbedder | None = None) -> None:
         self.embedder = embedder or FakeEmbedder()
         self.spaces: list[EmbeddingSpace] = []
@@ -112,8 +103,6 @@ class FakeEmbedderFactory:
 
 
 class FakeReranker:
-    """logit = number of query words found in the passage minus 1."""
-
     model_key = "fake-reranker"
 
     def __init__(
@@ -135,8 +124,6 @@ class FakeReranker:
 
 
 class FakeLLM:
-    """Scripted chat model; streams the text in chunks of `chunk_size` characters."""
-
     def __init__(  # noqa: PLR0913 - scripted fake with many knobs
         self,
         text: str = "",
@@ -175,8 +162,6 @@ class FakeLLM:
 
 @dataclass(slots=True)
 class FakeChunk:
-    """A stored chunk with its display data and vector."""
-
     id: ChunkId
     text: str
     embedded_text: str
@@ -188,12 +173,10 @@ class FakeChunk:
 
 @dataclass(slots=True)
 class FakeCollection:
-    """One in-memory collection."""
-
     space: EmbeddingSpace
     settings: CollectionSettings = field(default_factory=CollectionSettings)
     chunks: list[FakeChunk] = field(default_factory=list)
-    chunk_count: int | None = None  # override to simulate a large corpus
+    chunk_count: int | None = None
 
     def add(self, text: str, *, title: str = "Doc", heading_path: tuple[str, ...] = ()) -> ChunkId:
         n = len(self.chunks) + 1
@@ -268,15 +251,13 @@ class _Snapshot:
 
 
 class FakeSearchStore:
-    """SearchStore over one in-memory collection; `events` records the call order."""
-
     def __init__(self, collection: FakeCollection, events: list[str] | None = None) -> None:
         self.collection = collection
         self.events = events if events is not None else []
         self.vector_calls: list[bool] = []
         self.lexical_limits: list[int] = []
         self.lexical_queries: list[LexicalQuery] = []
-        self.hnsw_rows: int | None = None  # cap on rows of the non-exact path
+        self.hnsw_rows: int | None = None
 
     @asynccontextmanager
     async def snapshot(
@@ -290,14 +271,10 @@ class FakeSearchStore:
 
 
 def make_space(calibrated_threshold: float | None = None) -> EmbeddingSpace:
-    """A small test space."""
     return EmbeddingSpace(
         1, "fake", "fake", "fake", DIMS, calibrated_threshold=calibrated_threshold
     )
 
-
-# Repository fakes: one shared in-memory database mirroring the Postgres adapters'
-# semantics (swap/switch transactions, GC rules), driven by ingest/reembed/gc tests.
 
 EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -369,12 +346,6 @@ class _Job:
 
 
 class FakeDb:
-    """Shared state of the repository fakes; keys are tenant-scoped like RLS rows.
-
-    `hooks` maps a point name (`before_swap`, `before_switch`) to a callable run there,
-    used to inject concurrent changes deterministically.
-    """
-
     def __init__(self) -> None:
         self.tenants: dict[TenantId, Tenant] = {}
         self.cols: dict[tuple[TenantId, CollectionId], _Col] = {}
@@ -423,7 +394,6 @@ class FakeDb:
         return out
 
     def search_view(self, tenant: TenantId, collection_id: CollectionId) -> dict[ChunkId, int]:
-        """What a search snapshot sees: current chunks -> active space; asserts a vector."""
         space = self.col(tenant, collection_id).active_space_id
         view = {}
         for chunk_id in self.current_chunks(tenant, collection_id):
@@ -460,8 +430,6 @@ def _col_record(c: _Col) -> CollectionRecord:
 
 
 class FakeCollections:
-    """CollectionRepository over FakeDb."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
 
@@ -469,7 +437,6 @@ class FakeCollections:
         return self.create_now(tenant, new)
 
     def create_now(self, tenant: TenantId, new: NewCollection) -> CollectionRecord:
-        """Synchronous `create` for test setup."""
         if any(t == tenant and c.name == new.name for (t, _), c in self.db.cols.items()):
             raise ConflictError("already exists")
         cid = CollectionId(self.db.new_id())
@@ -520,7 +487,6 @@ class FakeCollections:
         jobs: Sequence[NewJob] = (),
     ) -> tuple[CollectionRecord, list[JobId]]:
         c = self._get(tenant, collection_id)
-        # Like the adapter: language and space live in their own columns.
         c.settings = replace(
             settings, language=c.settings.language, embedding_space=c.settings.embedding_space
         )
@@ -544,7 +510,7 @@ class FakeCollections:
     async def set_reembed_progress(
         self, tenant: TenantId, collection_id: CollectionId, done: int, total: int
     ) -> None:
-        c = self.db.cols.get((tenant, collection_id))  # the adapter never raises here
+        c = self.db.cols.get((tenant, collection_id))
         if c is not None and c.target_space_id is not None:
             c.reembed = {
                 "target_space_id": c.target_space_id,
@@ -590,8 +556,6 @@ def _delete_document(db: FakeDb, tenant: TenantId, document_id: DocumentId) -> N
 
 
 class FakeDocuments:
-    """DocumentRepository (and BlobStore) over FakeDb."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
         self.usage: dict[TenantId, int] = {}
@@ -900,8 +864,6 @@ def _ingest_args(cid: CollectionId, did: DocumentId, vid: VersionId) -> dict[str
 
 
 class FakeIndex:
-    """IndexRepository over FakeDb; swap and switch mirror the adapter's transactions."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
         self.swaps: list[VersionId] = []
@@ -989,7 +951,6 @@ class FakeIndex:
         chunk_ids = list(dict.fromkeys(m.chunk_id for m in memberships))
         if self._missing(tenant, col.id, chunk_ids):
             raise ConflictError("vectors missing", code="vectors_missing")
-        # Everything below is one transaction: no await, no hook.
         self.db.members[(tenant, version_id)] = [
             m for m in memberships if m.version_id == version_id
         ]
@@ -1102,8 +1063,6 @@ class FakeIndex:
 
 
 class FakeJobs:
-    """JobQueue over FakeDb plus helpers to claim jobs in tests."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
 
@@ -1141,7 +1100,6 @@ class FakeJobs:
         ]
 
     def claim(self, tenant: TenantId, kind: str | None = None) -> FakeJobRun | None:
-        """Claim the oldest queued job (delays ignored) of `kind`, bumping attempts."""
         for j in self.db.jobs_of(tenant, kind):
             if j.status == "queued":
                 j.status, j.attempts = "running", j.attempts + 1
@@ -1151,8 +1109,6 @@ class FakeJobs:
 
 @dataclass(slots=True)
 class FakeJobRun:
-    """JobRun handed to app handlers."""
-
     job: ClaimedJob
     row: _Job
     progress_calls: list[tuple[int, int]] = field(default_factory=list)
@@ -1163,8 +1119,6 @@ class FakeJobRun:
 
 
 class FakeSpaces:
-    """SpaceReader over FakeDb."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
 
@@ -1188,8 +1142,6 @@ class FakeSpaces:
 
 
 class FakeTenants:
-    """The TenantAdmin subset the job handlers use (get, delete)."""
-
     def __init__(self, db: FakeDb) -> None:
         self.db = db
         self.deleted: list[TenantId] = []
@@ -1218,8 +1170,6 @@ class FakeTenants:
 
 
 class FakeParser:
-    """Paragraph per blank-line block of UTF-8 text; `error` makes every parse fail."""
-
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
         self.calls = 0
@@ -1236,14 +1186,10 @@ class FakeParser:
 
 
 class WordCounter:
-    """Whitespace token counter."""
-
     def count(self, text: str) -> int:
         return len(text.split())
 
 
 class FakeTokenizers:
-    """Serves WordCounter for every tokenizer id."""
-
     def for_tokenizer(self, tokenizer_id: str) -> TokenCounter:
         return WordCounter()

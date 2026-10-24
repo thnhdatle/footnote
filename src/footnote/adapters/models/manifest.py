@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Parsing of `models/manifest.yaml`: pinned model files with revision and SHA-256."""
+"""Parsing of the pinned model manifest."""
 
 from __future__ import annotations
 
@@ -18,8 +18,6 @@ AMD64 = "amd64"
 
 @dataclass(frozen=True, slots=True)
 class ModelFile:
-    """One pinned file of a model; `path` is relative to the repository root."""
-
     path: str
     sha256: str
     size: int
@@ -28,8 +26,6 @@ class ModelFile:
 
 @dataclass(frozen=True, slots=True)
 class ModelEntry:
-    """A manifest entry (embedder or reranker)."""
-
     id: str
     kind: str
     repo: str
@@ -45,7 +41,6 @@ class ModelEntry:
 
 
 def host_arch() -> str:
-    """Manifest architecture key of this machine (`arm64` or `amd64`)."""
     return ARM64 if platform.machine().lower() in {"arm64", "aarch64"} else AMD64
 
 
@@ -60,7 +55,6 @@ def _file(raw: dict[str, Any]) -> ModelFile:
 
 
 def _variants(raw: dict[str, Any]) -> dict[str, ModelFile]:
-    """Flatten `fp32` and per-arch `int8` into keys `fp32`, `int8-arm64`, `int8-amd64`."""
     out: dict[str, ModelFile] = {}
     for name, value in raw.items():
         if "path" in value:
@@ -90,12 +84,11 @@ def _entry(raw: dict[str, Any]) -> ModelEntry:
 
 @dataclass(frozen=True, slots=True)
 class Manifest:
-    """All pinned models, by id."""
+    """The pinned models by id."""
 
     models: dict[str, ModelEntry]
 
     def get(self, model_id: str) -> ModelEntry:
-        """Entry for `model_id`; NotFoundError when the manifest has none."""
         try:
             return self.models[model_id]
         except KeyError:
@@ -103,7 +96,7 @@ class Manifest:
 
 
 def load_manifest(path: Path) -> Manifest:
-    """Read and validate a manifest file."""
+    """Reads and validates a manifest file."""
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
         entries = [_entry(e) for e in raw["models"]]
@@ -113,7 +106,6 @@ def load_manifest(path: Path) -> Manifest:
 
 
 def reranker_variant_key(variant: str, arch: str | None = None) -> str:
-    """Manifest variant key for a configured `fp32` or `int8` variant on `arch`."""
     if variant == "fp32":
         return "fp32"
     if variant == "int8":
@@ -122,5 +114,4 @@ def reranker_variant_key(variant: str, arch: str | None = None) -> str:
 
 
 def local_path(models_dir: Path, entry: ModelEntry, file: ModelFile) -> Path:
-    """Where `file` lives on disk: `<models_dir>/<id>/<path>`."""
     return models_dir / entry.id / file.path

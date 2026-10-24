@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fixture generator produces all formats and consistent expected elements."""
 
 from __future__ import annotations
 

@@ -1,16 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Bearer authentication.
-
-Tenant routes take `Authorization: Bearer <api key>`; the key is resolved through the
-`KeyResolver` port (`footnote_resolve_key`, which ignores revoked and expired keys) and
-every repository call of the request is made with the resolved tenant id, so each
-transaction runs under that tenant's RLS setting. Unknown, revoked or expired keys and
-malformed headers are 401 `unauthenticated`; another tenant's resource ids are 404,
-never 403, because RLS makes them absent.
-
-Admin routes compare the bearer token with the configured admin key in constant time;
-tenant keys (and every token while no admin key is configured) are 401.
-"""
+"""Bearer authentication."""
 
 from __future__ import annotations
 
@@ -39,8 +28,6 @@ _admin_scheme = HTTPBearer(
 
 @dataclass(frozen=True, slots=True)
 class Principal:
-    """The authenticated tenant of a request."""
-
     tenant: TenantId
     key_id: UUID
 
@@ -59,7 +46,7 @@ async def tenant_principal(
     deps: Annotated[ApiDeps, Depends(get_deps)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_tenant_scheme)],
 ) -> Principal:
-    """Resolve the request's API key to its tenant (401 `unauthenticated` otherwise)."""
+    """Resolves the API key of a request to its tenant."""
     tenant, key_id = await deps.keys.resolve(_token(credentials))
     request.state.tenant = str(tenant)
     structlog.contextvars.bind_contextvars(tenant=str(tenant))
@@ -70,7 +57,7 @@ async def require_admin(
     deps: Annotated[ApiDeps, Depends(get_deps)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_admin_scheme)],
 ) -> None:
-    """Accept only the configured admin key (constant-time comparison)."""
+    """Accepts only the admin key."""
     token = _token(credentials)
     expected = deps.settings.admin_key
     if not expected:

@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Connection pools and tenant-scoped transactions (row-level security per tenant).
-
-Every tenant transaction starts with `set_config('footnote.tenant_id', $1, true)`; the
-tenant id is always a bind parameter, never interpolated into SQL text. The setting is
-transaction-local, so pooled connections (and transaction poolers) never carry a tenant
-from one transaction to the next.
-"""
+"""Connection pools and tenant-scoped transactions."""
 
 from __future__ import annotations
 
@@ -39,23 +33,15 @@ _SET_TIMEOUT = "SELECT set_config('statement_timeout', %(timeout)s, true)"
 
 
 def new_id() -> UUID:
-    """A new ULID stored as uuid."""
     return ULID().to_uuid()
 
 
 def jsonb(value: Any) -> Jsonb:
-    """Wrap a JSON-ready value (UUIDs and datetimes allowed) for a jsonb parameter."""
     return Jsonb(value, dumps=lambda v: orjson.dumps(v).decode())
 
 
 @dataclass(frozen=True, slots=True)
 class PoolSettings:
-    """Pool options from config (`database.*` / `admin_database.*`).
-
-    `prepare_threshold` None disables psycopg auto-prepare (needed behind a transaction
-    pooler).
-    """
-
     conninfo: str
     min_size: int = 1
     max_size: int = 20
@@ -64,7 +50,7 @@ class PoolSettings:
 
 
 async def open_pool(settings: PoolSettings) -> Pool:
-    """Open an async pool of autocommit connections; transactions are always explicit."""
+    """Opens an async connection pool."""
     pool: Pool = AsyncConnectionPool(
         settings.conninfo,
         min_size=settings.min_size,
@@ -80,18 +66,13 @@ async def open_pool(settings: PoolSettings) -> Pool:
 
 @dataclass(frozen=True, slots=True)
 class Database:
-    """A pool plus the per-transaction policy shared by the repositories.
-
-    `app_tenant_predicates` False removes the defence-in-depth `tenant_id = %(tenant)s`
-    predicates (tenant-isolation fault test only; RLS must still isolate tenants).
-    """
+    """A pool with the transaction policy shared by the repositories."""
 
     pool: Pool
     statement_timeout_ms: int = 30_000
     app_tenant_predicates: bool = True
 
     def tenant_filter(self, alias: str) -> sql.Composable:
-        """`<alias>.tenant_id = %(tenant)s`, or TRUE in the tenant-isolation fault test."""
         if not self.app_tenant_predicates:
             return sql.SQL("TRUE")
         return sql.SQL("{}.tenant_id = %(tenant)s").format(sql.Identifier(alias))
@@ -100,7 +81,7 @@ class Database:
     async def tenant_tx(
         self, tenant: TenantId, *, read_only_snapshot: bool = False
     ) -> AsyncIterator[Conn]:
-        """Transaction scoped to `tenant` by the RLS setting; commits on success."""
+        """Opens a transaction scoped to a tenant by row-level security."""
         async with self.pool.connection() as conn, translate_errors(), conn.transaction():
             if read_only_snapshot:
                 await conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
@@ -111,7 +92,7 @@ class Database:
 
     @asynccontextmanager
     async def global_tx(self) -> AsyncIterator[Conn]:
-        """Transaction without a tenant (admin pool, definer-function calls)."""
+        """Opens a transaction without a tenant."""
         async with self.pool.connection() as conn, translate_errors(), conn.transaction():
             await conn.execute(_SET_TIMEOUT, {"timeout": f"{self.statement_timeout_ms}"})
             yield conn
@@ -119,7 +100,6 @@ class Database:
 
 @asynccontextmanager
 async def translate_errors() -> AsyncIterator[None]:
-    """Map integrity errors to domain errors at the adapter boundary."""
     try:
         yield
     except errors.UniqueViolation as exc:
@@ -135,28 +115,24 @@ def _constraint(exc: errors.Error) -> str:
 
 
 async def fetch_all(conn: Conn, query: Query, params: Params | None = None) -> list[Row]:
-    """Run `query` and return every row as a dict."""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(query, params)
         return await cur.fetchall()
 
 
 async def fetch_one(conn: Conn, query: Query, params: Params | None = None) -> Row | None:
-    """Run `query` and return the first row as a dict, or None."""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(query, params)
         return await cur.fetchone()
 
 
 async def execute(conn: Conn, query: Query, params: Params | None = None) -> int:
-    """Run a statement and return its row count."""
     async with conn.cursor() as cur:
         await cur.execute(query, params)
         return cur.rowcount
 
 
 def require[T](value: T | None, message: str) -> T:
-    """Return `value` or raise NotFoundError (other tenants' ids look absent too)."""
     if value is None:
         raise NotFoundError(message)
     return value

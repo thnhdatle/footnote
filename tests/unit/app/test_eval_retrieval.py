@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`eval retrieval` runner: ablation row plans, requests (depth/legs), pooling and scoring."""
 
 from __future__ import annotations
 
@@ -130,7 +129,6 @@ def test_variant_settings_describe_only_what_the_mode_uses() -> None:
         "chunking=heading lexical_match=any lexical_rank=ts_rank rrf_k=60 "
         "rrf_weights=lexical:0.2,vector:1 reranker=int8 rerank_n=30"
     )
-    # vector rows ignore lexical settings when deciding "shipped"
     assert vector.with_(lexical_weight=1.0).is_shipped(SHIPPED)
 
 
@@ -165,7 +163,6 @@ async def test_run_variant_pools_chunks_to_documents_by_first_occurrence() -> No
 
 
 async def test_run_variant_rerank_head_then_rrf_remainder() -> None:
-    # The fake reranker scores by query-word overlap: "beta gamma" ranks chunk 3 first.
     texts = ["beta", "beta delta", "beta gamma", "beta epsilon"]
     service, target, reranker = _service(texts, rerank_n=3)
     hybrid = Variant.shipped(SHIPPED, EvalMode.HYBRID, "test", HEADING)

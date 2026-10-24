@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Citation verifier: sentence splitting, `[n]` marker cleanup and quote-span selection."""
+"""Citation verifier: sentence splitting, marker cleanup and quote selection."""
 
 from __future__ import annotations
 
@@ -43,16 +43,12 @@ _THINK_CLOSE = "</think>"
 
 @dataclass(frozen=True, slots=True)
 class Span:
-    """Half-open character range `[start, end)` of a sentence."""
-
     start: int
     end: int
 
 
 @dataclass(frozen=True, slots=True)
 class VerifiedAnswer:
-    """Answer text with invalid markers removed plus the citations that remain."""
-
     text: str
     citations: tuple[Citation, ...]
     unsupported: bool
@@ -60,7 +56,6 @@ class VerifiedAnswer:
 
 
 def strip_reasoning(text: str) -> str:
-    """Drop a leading `<think>` block (or an unterminated one) and left-strip the rest."""
     stripped = text.lstrip()
     if not stripped.startswith(_THINK_OPEN):
         return stripped
@@ -83,7 +78,6 @@ def _is_list_number(text: str, term_start: int) -> bool:
 
 
 def split_sentences(text: str) -> list[Span]:
-    """Split text into trimmed, non-empty sentence spans (offsets into `text`)."""
     cuts = {0, len(text)}
     for m in _TERMINATOR_RE.finditer(text):
         if m.group("term") == "." and (
@@ -117,7 +111,6 @@ def _numbers(group: str) -> list[int]:
 
 
 def find_markers(text: str) -> list[int]:
-    """Return every marker number found outside code, in order of appearance."""
     ranges = _code_ranges(text)
     found: list[int] = []
     for m in MARKER_RE.finditer(text):
@@ -223,7 +216,7 @@ def _citations(text: str, hits: Sequence[Hit]) -> tuple[Citation, ...]:
 
 
 def verify(answer_text: str, hits: Sequence[Hit]) -> VerifiedAnswer:
-    """Remove invalid `[n]` markers and build one citation per distinct valid number."""
+    """Removes invalid markers and builds one citation per valid number."""
     text = answer_text
     removed = 0
     while True:

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Duration and size parsing."""
 
 from __future__ import annotations
 

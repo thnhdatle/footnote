@@ -1,16 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Configuration: YAML file, `FOOTNOTE_*` environment overrides, fail-fast validation.
-
-Precedence: CLI flags (applied by the CLI) > env vars > config file >
-defaults. Every leaf option has the env name `FOOTNOTE_<PATH>` with the path joined by
-underscores (`database.pool_max` is `FOOTNOTE_DATABASE_POOL_MAX`); mapping and list
-options take JSON. Secrets are env-only or read from the file named by the sibling
-`*_file` key; they are rejected in the YAML file itself.
-
-Usage:
-    settings = load_settings("/etc/footnote/config.yaml")   # raises ConfigError
-    settings.llm.model
-"""
+"""Settings loader: YAML file and `FOOTNOTE_*` environment overrides with fail-fast validation."""
 
 from __future__ import annotations
 
@@ -56,7 +45,6 @@ TEST_FAULTS_ENV = "FOOTNOTE_ENABLE_TEST_FAULTS"
 EXIT_CODE_INVALID = 2
 
 Duration = Annotated[float, BeforeValidator(parse_duration), Field(gt=0)]
-# Durations where 0 means "immediately" (ingest.gc_grace; the swap-consistency test runs with 0s).
 NonNegativeDuration = Annotated[float, BeforeValidator(parse_duration), Field(ge=0)]
 Size = Annotated[int, BeforeValidator(parse_size), Field(gt=0)]
 Listen = Annotated[str, Field(pattern=r"^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9._-]*):[0-9]{1,5}$")]
@@ -67,15 +55,12 @@ _NULLS = {"null", "none", "~"}
 
 
 class ConfigError(Exception):
-    """Every problem found while loading the configuration (reported at once, exit 2)."""
-
     def __init__(self, errors: list[str]) -> None:
         super().__init__("invalid configuration:\n" + "\n".join(f"  - {e}" for e in errors))
         self.errors = errors
 
 
 def secret_field() -> Any:
-    """A secret option: never in YAML or the example file, redacted when printed."""
     return Field(default=SecretStr(""), json_schema_extra={"secret": True})
 
 
@@ -84,7 +69,6 @@ class _Section(BaseModel):
 
 
 def _check_listen(value: str) -> str:
-    """Port 0..65535; 0 binds an ephemeral port (logged at startup)."""
     port = int(value.rsplit(":", 1)[1])
     if not 0 <= port <= _PORT_MAX:
         raise ValueError(f"port {port} out of range")
@@ -92,24 +76,18 @@ def _check_listen(value: str) -> str:
 
 
 class ServerConfig(_Section):
-    """`server.*`: data plane listener."""
-
     listen: Listen = "127.0.0.1:8000"
 
     _port = field_validator("listen")(_check_listen)
 
 
 class AdminConfig(_Section):
-    """`admin.*`: admin listener (health, readiness, metrics)."""
-
     listen: Listen = "127.0.0.1:9094"
 
     _port = field_validator("listen")(_check_listen)
 
 
 class LogConfig(_Section):
-    """`log.*`."""
-
     format: Literal["json", "text"] = "json"
     level: Literal["debug", "info", "warn", "warning", "error"] = "info"
     capture_content: bool = False
@@ -117,8 +95,6 @@ class LogConfig(_Section):
 
 
 class DatabaseConfig(_Section):
-    """`database.*`: the `footnote_app` pool."""
-
     url: SecretStr = secret_field()
     url_file: str = ""
     pool_max: int = Field(default=20, ge=1, le=1000)
@@ -127,24 +103,18 @@ class DatabaseConfig(_Section):
 
 
 class AdminDatabaseConfig(_Section):
-    """`admin_database.*`: the `footnote_admin` pool."""
-
     url: SecretStr = secret_field()
     url_file: str = ""
     pool_max: int = Field(default=4, ge=1, le=100)
 
 
 class AuthConfig(_Section):
-    """`auth.*`."""
-
     admin_key: SecretStr = secret_field()
     admin_key_file: str = ""
     key_rotation_grace: Duration = 86400.0
 
 
 class QuotaConfig(_Section):
-    """Default tenant quotas; 0 is unlimited."""
-
     max_collections: int = Field(default=0, ge=0)
     max_documents: int = Field(default=0, ge=0)
     max_chunks: int = Field(default=0, ge=0)
@@ -152,20 +122,14 @@ class QuotaConfig(_Section):
 
 
 class TenancyConfig(_Section):
-    """`tenancy.*`."""
-
     default_quotas: QuotaConfig = Field(default_factory=QuotaConfig)
 
 
 class CollectionsConfig(_Section):
-    """`collections.*`."""
-
     default_language: Language = Language.SIMPLE
 
 
 class LLMSection(_Section):
-    """`llm.*`; an empty `base_url` disables answers."""
-
     base_url: str = ""
     model: str = ""
     api_key: SecretStr = secret_field()
@@ -185,8 +149,6 @@ class LLMSection(_Section):
 
 
 class SpaceConfig(_Section):
-    """One embedding space registered at startup."""
-
     name: str
     provider: Literal["onnx_local", "openai_compat"]
     model: str
@@ -210,8 +172,6 @@ class SpaceConfig(_Section):
 
 
 class HnswConfig(_Section):
-    """`embedding.hnsw.*` (pgvector build parameters)."""
-
     m: int = Field(default=16, ge=2, le=100)
     ef_construction: int = Field(default=64, ge=4, le=1000)
 
@@ -229,8 +189,6 @@ def _default_spaces() -> list[SpaceConfig]:
 
 
 class EmbeddingConfig(_Section):
-    """`embedding.*`."""
-
     default_space: str = "bge-small-en-v1.5-onnx"
     spaces: list[SpaceConfig] = Field(default_factory=_default_spaces)
     base_url: str = ""
@@ -263,8 +221,6 @@ def _expand(value: object) -> object:
 
 
 class ModelsConfig(_Section):
-    """`models.*`."""
-
     dir: Annotated[Path, BeforeValidator(_expand)] = Field(
         default_factory=lambda: Path("~/.cache/rayld/footnote/models").expanduser()
     )
@@ -278,8 +234,6 @@ class ModelsConfig(_Section):
 
 
 class RerankConfig(_Section):
-    """`rerank.*`."""
-
     provider: Literal["onnx_cross_encoder", "noop"] = "onnx_cross_encoder"
     model: str = "ms-marco-MiniLM-L6-v2"
     variant: Literal["int8", "fp32"] = "int8"
@@ -288,8 +242,6 @@ class RerankConfig(_Section):
 
 
 class ChunkingConfig(_Section):
-    """`chunking.*` (defaults of new collections; bounds from domain.settings)."""
-
     strategy: ChunkingStrategyName = ChunkingStrategyName.HEADING
     tokenizer: str = "bge-small-en-v1.5"
     max_tokens: int = 400
@@ -298,15 +250,11 @@ class ChunkingConfig(_Section):
 
 
 class RrfWeights(_Section):
-    """`retrieval.rrf_weights.*`."""
-
     lexical: float = 0.2
     vector: float = 1.0
 
 
 class RetrievalConfig(_Section):
-    """`retrieval.*` (defaults of new collections plus server-wide scan options)."""
-
     default_mode: SearchMode = SearchMode.HYBRID
     lexical_match: LexicalMatch = LexicalMatch.ANY
     lexical_rank: LexicalRank = LexicalRank.TS_RANK
@@ -324,8 +272,6 @@ class RetrievalConfig(_Section):
 
 
 class AnswerConfig(_Section):
-    """`answer.*`; null thresholds fall back to the calibrated values."""
-
     evidence_threshold_rerank: float | None = None
     evidence_threshold_vector: float | None = None
     unsupported_as_abstain: bool = False
@@ -333,8 +279,6 @@ class AnswerConfig(_Section):
 
 
 class IngestConfig(_Section):
-    """`ingest.*`."""
-
     workers: int = Field(default=4, ge=1, le=256)
     max_file_bytes: Size = 50 * 1024**2
     max_pages: int = Field(default=2000, ge=1)
@@ -349,8 +293,6 @@ class IngestConfig(_Section):
 
 
 class WebhooksConfig(_Section):
-    """`webhooks.*`."""
-
     allow_http: bool = False
     allow_private: bool = False
     timeout: Duration = 5.0
@@ -358,8 +300,6 @@ class WebhooksConfig(_Section):
 
 
 class EvalConfig(_Section):
-    """`eval.*`."""
-
     cache_dir: Annotated[Path, BeforeValidator(_expand)] = Field(
         default_factory=lambda: Path("~/.cache/rayld/footnote/eval").expanduser()
     )
@@ -372,16 +312,12 @@ class EvalConfig(_Section):
 
 
 class TestingConfig(_Section):
-    """`testing.*`; the flag is honoured only through `Settings.tenant_predicates_disabled`."""
-
-    __test__ = False  # not a pytest class
+    __test__ = False
 
     disable_app_tenant_predicates: bool = False
 
 
 class Settings(BaseSettings):
-    """The whole configuration; immutable after load."""
-
     model_config = SettingsConfigDict(extra="forbid", frozen=True, env_prefix=ENV_PREFIX)
 
     server: ServerConfig = Field(default_factory=ServerConfig)
@@ -414,7 +350,6 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,  # noqa: ARG003
         file_secret_settings: PydanticBaseSettingsSource,  # noqa: ARG003
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Only explicit values: `load_settings` does the file and env merge (own env names)."""
         return (init_settings,)
 
     @model_validator(mode="after")
@@ -425,7 +360,6 @@ class Settings(BaseSettings):
         return self
 
     def chunking_settings(self) -> ChunkingSettings:
-        """Default chunking settings of new collections."""
         c = self.chunking
         return ChunkingSettings(
             strategy=c.strategy,
@@ -436,7 +370,6 @@ class Settings(BaseSettings):
         )
 
     def retrieval_settings(self) -> RetrievalSettings:
-        """Default retrieval settings of new collections."""
         r = self.retrieval
         return RetrievalSettings(
             lexical_match=r.lexical_match,
@@ -451,7 +384,6 @@ class Settings(BaseSettings):
         )
 
     def answer_settings(self) -> AnswerSettings:
-        """Default answer settings of new collections."""
         a = self.answer
         return AnswerSettings(
             evidence_threshold_rerank=a.evidence_threshold_rerank,
@@ -461,7 +393,6 @@ class Settings(BaseSettings):
         )
 
     def collection_defaults(self) -> CollectionSettings:
-        """Settings a new collection starts with."""
         return CollectionSettings(
             chunking=self.chunking_settings(),
             retrieval=self.retrieval_settings(),
@@ -471,7 +402,6 @@ class Settings(BaseSettings):
         )
 
     def domain_errors(self) -> list[str]:
-        """Violations of the collection-settings bounds in the collection defaults, all of them."""
         problems: list[str] = []
         for check in (
             self.chunking_settings().validate,
@@ -485,12 +415,10 @@ class Settings(BaseSettings):
         return problems
 
     def tenant_predicates_disabled(self, env: Mapping[str, str] | None = None) -> bool:
-        """The tenant-isolation fault flag, honoured only with `FOOTNOTE_ENABLE_TEST_FAULTS=1`."""
         source = os.environ if env is None else env
         return self.testing.disable_app_tenant_predicates and source.get(TEST_FAULTS_ENV) == "1"
 
     def redacted(self) -> dict[str, Any]:
-        """JSON-ready dump with every secret replaced by `***` (empty stays empty)."""
         dump: dict[str, Any] = self.model_dump(mode="json")
         for path in SECRET_PATHS:
             node = dump
@@ -504,7 +432,6 @@ type Path_ = tuple[str, ...]
 
 
 def _unwrap(annotation: Any) -> Any:
-    """The non-None member of `X | None`."""
     if get_origin(annotation) in (Union, types.UnionType):
         members = [a for a in get_args(annotation) if a is not type(None)]
         if len(members) == 1:
@@ -519,7 +446,6 @@ def _is_section(annotation: Any) -> bool:
 def config_leaves(
     model: type[BaseModel] = Settings, prefix: Path_ = ()
 ) -> Iterator[tuple[Path_, FieldInfo]]:
-    """Every leaf option (non-section field) with its path."""
     for name, info in model.model_fields.items():
         annotation = _unwrap(info.annotation)
         if _is_section(annotation):
@@ -529,7 +455,6 @@ def config_leaves(
 
 
 def env_name(path: Path_) -> str:
-    """Environment variable overriding the option at `path`."""
     return ENV_PREFIX + "_".join(path).upper()
 
 
@@ -618,10 +543,7 @@ def _format_validation(exc: ValidationError) -> list[str]:
 
 
 def load_settings(path: str | Path | None = None, env: Mapping[str, str] | None = None) -> Settings:
-    """Load, merge and validate; raises `ConfigError` listing every problem (exit code 2).
-
-    `path` defaults to `$FOOTNOTE_CONFIG`; with neither, defaults plus env are used.
-    """
+    """Load the settings from the YAML file and the environment; raise ConfigError when invalid."""
     source = os.environ if env is None else env
     errors: list[str] = []
     data: dict[str, Any] = {}

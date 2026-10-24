@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""HTML via selectolax: h1-h6, p, li, table and pre; nav/footer/script/style are dropped."""
+"""HTML parser."""
 
 from __future__ import annotations
 
@@ -59,7 +59,6 @@ class _Walker:
         self.builder = ElementBuilder()
 
     def children(self, node: Node) -> None:
-        """Walk a container, turning loose inline runs into paragraphs."""
         buf: list[str] = []
         for child in node.iter(include_text=True):
             tag = child.tag
@@ -79,7 +78,6 @@ class _Walker:
         buf.clear()
 
     def block(self, node: Node) -> None:
-        """Handle one block-level element."""
         tag = node.tag
         if tag in _HEADINGS:
             self.builder.add(ElementKind.HEADING, squash(_text_of(node)), level=_HEADINGS[tag])
@@ -120,7 +118,7 @@ class _Walker:
 
 
 def parse_html(text: str) -> list[Element]:
-    """Parse an HTML document into elements."""
+    """Parses an HTML document into elements."""
     tree = HTMLParser(text)
     for node in tree.css(",".join(_STRIPPED)):
         node.decompose()

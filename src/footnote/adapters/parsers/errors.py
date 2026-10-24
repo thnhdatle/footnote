@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Parser errors; codes are the ones the document's `failed` error exposes."""
+"""Parser errors."""
 
 from __future__ import annotations
 
@@ -14,6 +14,6 @@ UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"
 
 
 class ParseError(DomainError):
-    """A document could not be parsed; `code` says why (default `parse_failed`)."""
+    """Raised when a document cannot be parsed."""
 
     code = PARSE_FAILED
