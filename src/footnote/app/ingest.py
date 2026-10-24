@@ -225,7 +225,7 @@ class IngestService:
         start = self._d.clock.monotonic()
         with tracer().start_as_current_span("parse"):
             data = await self._d.documents.source(tenant, version.id)
-            elements = await self._d.parser.parse(version.media_type, data)
+            elements = (await self._d.parser.parse(version.media_type, data)).elements
         self._stage("parse", start)
         await self._d.documents.store_elements(
             tenant, version.id, elements, pages=page_count(elements)

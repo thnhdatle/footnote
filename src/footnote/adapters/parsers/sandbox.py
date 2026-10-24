@@ -7,19 +7,20 @@ import asyncio
 import multiprocessing as mp
 import sys
 from collections.abc import Callable
+from dataclasses import asdict
 from multiprocessing.connection import Connection
 from typing import Any
 
 from footnote.adapters.parsers.errors import PARSE_FAILED, PARSE_TIMEOUT, ParseError
 from footnote.adapters.parsers.limits import ParseLimits
 from footnote.adapters.parsers.parse import parse_bytes
-from footnote.domain.documents import Element
+from footnote.domain.documents import Element, PageImage, ParsedDocument
 
 _MIB = 1024 * 1024
 _CPU_GRACE_SECONDS = 5
 _ADDRESS_SPACE = 4096 * _MIB
 
-Runner = Callable[[str, bytes, ParseLimits], list[Element]]
+Runner = Callable[[str, bytes, ParseLimits], ParsedDocument]
 
 
 def _apply_resource_limits(limits: ParseLimits) -> None:
@@ -49,8 +50,9 @@ def _child(
 ) -> None:
     try:
         _apply_resource_limits(limits)
-        elements = runner(media_type, data, limits)
-        conn.send(("ok", [e.to_dict() for e in elements]))
+        parsed = runner(media_type, data, limits)
+        elements = [e.to_dict() for e in parsed.elements]
+        conn.send(("ok", elements, [asdict(i) for i in parsed.images]))
     except ParseError as exc:
         conn.send(("err", exc.code, exc.message))
     except BaseException as exc:
@@ -64,7 +66,7 @@ def run_sandboxed(
     data: bytes,
     limits: ParseLimits,
     runner: Runner = parse_bytes,
-) -> list[Element]:
+) -> ParsedDocument:
     """Parses data in a child process and kills it on timeout."""
     ctx = mp.get_context("spawn")
     parent, child_conn = ctx.Pipe(duplex=False)
@@ -84,7 +86,9 @@ def run_sandboxed(
         raise ParseError(f"parsing exceeded {limits.parse_timeout:g}s", code=PARSE_TIMEOUT)
     if message[0] == "err":
         raise ParseError(message[2], code=message[1])
-    return [Element.from_dict(d) for d in message[1]]
+    return ParsedDocument(
+        [Element.from_dict(d) for d in message[1]], [PageImage(**d) for d in message[2]]
+    )
 
 
 def _receive(conn: Connection, timeout: float) -> tuple[Any, ...] | None:
@@ -104,6 +108,6 @@ class SandboxedParser:
         self._limits = limits or ParseLimits()
         self._runner = runner
 
-    async def parse(self, media_type: str, data: bytes) -> list[Element]:
+    async def parse(self, media_type: str, data: bytes) -> ParsedDocument:
         """Parses data in the sandbox without blocking the event loop."""
         return await asyncio.to_thread(run_sandboxed, media_type, data, self._limits, self._runner)

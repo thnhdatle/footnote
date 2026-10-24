@@ -5400,7 +5400,8 @@
                         "paragraph",
                         "list_item",
                         "table",
-                        "code"
+                        "code",
+                        "image"
                       ],
                       "title": "ElementKind",
                       "type": "string"

@@ -28,6 +28,7 @@ class ElementKind(StrEnum):
     LIST_ITEM = "list_item"
     TABLE = "table"
     CODE = "code"
+    IMAGE = "image"
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,22 @@ class Element:
             page=data.get("page"),
             page_to=data.get("page_to"),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class PageImage:
+    order: int
+    page: int
+    media_type: str
+    data: bytes = field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedDocument:
+    """Parsed elements, with the bytes of the images their image elements stand for."""
+
+    elements: list[Element]
+    images: list[PageImage] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

@@ -14,23 +14,23 @@ from footnote.adapters.parsers import (
     media,
     run_sandboxed,
 )
-from footnote.domain.documents import Element, ElementKind
+from footnote.domain.documents import ElementKind, PageImage, ParsedDocument
 
 
-def _sleep_forever(_media_type: str, _data: bytes, _limits: ParseLimits) -> list[Element]:
+def _sleep_forever(_media_type: str, _data: bytes, _limits: ParseLimits) -> ParsedDocument:
     time.sleep(60)
-    return []
+    return ParsedDocument([])
 
 
-def _crash(_media_type: str, _data: bytes, _limits: ParseLimits) -> list[Element]:
+def _crash(_media_type: str, _data: bytes, _limits: ParseLimits) -> ParsedDocument:
     os._exit(137)
 
 
-def _boom(_media_type: str, _data: bytes, _limits: ParseLimits) -> list[Element]:
+def _boom(_media_type: str, _data: bytes, _limits: ParseLimits) -> ParsedDocument:
     raise RuntimeError("boom")
 
 
-def _typed_error(_media_type: str, _data: bytes, _limits: ParseLimits) -> list[Element]:
+def _typed_error(_media_type: str, _data: bytes, _limits: ParseLimits) -> ParsedDocument:
     raise ParseError("too big", code="archive_too_large")
 
 
@@ -59,11 +59,21 @@ def test_child_failures_become_parse_errors(name: str, runner: object, code: str
 async def test_sandboxed_parser_round_trips_elements() -> None:
     parser = SandboxedParser()
 
-    got = await parser.parse(media.TEXT, b"first\n\nsecond")
+    got = (await parser.parse(media.TEXT, b"first\n\nsecond")).elements
 
     assert [e.text for e in got] == ["first", "second"]
     assert all(e.kind is ElementKind.PARAGRAPH for e in got)
     assert [e.order for e in got] == [0, 1]
+
+
+def _with_image(_media_type: str, _data: bytes, _limits: ParseLimits) -> ParsedDocument:
+    return ParsedDocument([], [PageImage(0, 3, "image/png", b"\x89PNG")])
+
+
+def test_sandbox_round_trips_images() -> None:
+    got = run_sandboxed(media.PDF, b"x", ParseLimits(), _with_image)
+
+    assert got.images == [PageImage(0, 3, "image/png", b"\x89PNG")]
 
 
 async def test_sandboxed_parser_rejects_unsupported_type() -> None:

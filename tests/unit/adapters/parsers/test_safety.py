@@ -47,7 +47,7 @@ def test_billion_laughs_docx_is_not_expanded(base_docx: bytes) -> None:
     data = _docx_with_xml(base_docx, xml)
 
     with contextlib.suppress(ParseError):
-        elements = parse_bytes(media.DOCX, data)
+        elements = parse_bytes(media.DOCX, data).elements
         assert sum(len(e.text) for e in elements) < 1000
 
 
@@ -57,7 +57,7 @@ def test_external_entity_docx_reads_no_file(base_docx: bytes) -> None:
     )
     data = _docx_with_xml(base_docx, xml)
 
-    elements = parse_bytes(media.DOCX, data)
+    elements = parse_bytes(media.DOCX, data).elements
 
     assert "root:" not in " ".join(e.text for e in elements)
 

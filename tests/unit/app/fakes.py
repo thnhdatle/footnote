@@ -27,6 +27,7 @@ from footnote.domain.documents import (
     Membership,
     NewCollection,
     NewUpload,
+    ParsedDocument,
     SwapResult,
     UploadResult,
     VersionId,
@@ -1174,15 +1175,17 @@ class FakeParser:
         self.error = error
         self.calls = 0
 
-    async def parse(self, media_type: str, data: bytes) -> list[Element]:
+    async def parse(self, media_type: str, data: bytes) -> ParsedDocument:
         self.calls += 1
         if self.error is not None:
             raise self.error
         blocks = [b.strip() for b in data.decode().split("\n\n") if b.strip()]
-        return [
-            Element(ElementKind.PARAGRAPH, b, n, page=n + 1, page_to=n + 1)
-            for n, b in enumerate(blocks)
-        ]
+        return ParsedDocument(
+            [
+                Element(ElementKind.PARAGRAPH, b, n, page=n + 1, page_to=n + 1)
+                for n, b in enumerate(blocks)
+            ]
+        )
 
 
 class WordCounter:

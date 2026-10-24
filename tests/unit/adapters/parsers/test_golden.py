@@ -27,6 +27,6 @@ def test_fixture_matches_expected(corpus: Path, name: str, ext: str) -> None:
     data = path.read_bytes()
 
     assert sniff(data, path.name) == _TYPES[ext]
-    got = [e.to_dict() for e in parse_bytes(_TYPES[ext], data)]
+    got = [e.to_dict() for e in parse_bytes(_TYPES[ext], data).elements]
 
     assert got == expected

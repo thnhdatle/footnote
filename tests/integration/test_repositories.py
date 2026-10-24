@@ -277,7 +277,10 @@ async def test_document_lifecycle_methods(app_db: Database, a: World) -> None:
     assert (
         await docs.get(a.tenant, a.collection.id, a.document_id)
     ).status is DocumentStatus.PARSING
-    elements = [Element(ElementKind.HEADING, "H", 0, level=1, heading_path=("H",), page=1)]
+    elements = [
+        Element(ElementKind.HEADING, "H", 0, level=1, heading_path=("H",), page=1),
+        Element(ElementKind.IMAGE, "A bar chart.", 1, heading_path=("H",), page=3, page_to=3),
+    ]
     await docs.store_elements(a.tenant, a.version_id, elements, pages=3)
     assert await docs.elements(a.tenant, a.version_id) == elements
     assert (await docs.version(a.tenant, a.version_id)).pages == 3

@@ -28,6 +28,7 @@ from footnote.domain.documents import (
     Membership,
     NewCollection,
     NewUpload,
+    ParsedDocument,
     SwapResult,
     UploadResult,
     VersionId,
@@ -114,7 +115,7 @@ class LLM(Protocol):
 class Parser(Protocol):
     """Turns an original file into elements."""
 
-    async def parse(self, media_type: str, data: bytes) -> list[Element]: ...
+    async def parse(self, media_type: str, data: bytes) -> ParsedDocument: ...
 
 
 @dataclass(frozen=True, slots=True)
