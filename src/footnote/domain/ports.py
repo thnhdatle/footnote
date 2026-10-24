@@ -28,6 +28,7 @@ from footnote.domain.documents import (
     Membership,
     NewCollection,
     NewUpload,
+    PageImage,
     ParsedDocument,
     SwapResult,
     UploadResult,
@@ -116,6 +117,12 @@ class Parser(Protocol):
     """Turns an original file into elements."""
 
     async def parse(self, media_type: str, data: bytes) -> ParsedDocument: ...
+
+
+class ImageDescriber(Protocol):
+    """Describes an image in plain text."""
+
+    async def describe(self, image: PageImage, prompt: str) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)

@@ -74,6 +74,10 @@ class OpenAICompatLLM:
 
     async def chat(self, messages: Sequence[ChatMessage]) -> ChatResult:
         """Completes a chat and returns the text."""
+        return await self.complete(_raw(messages))
+
+    async def complete(self, messages: Sequence[Mapping[str, Any]]) -> ChatResult:
+        """Completes a chat given as OpenAI message objects, such as ones with image parts."""
         response = await self._open(self._body(messages, stream=False))
         try:
             payload = orjson.loads(await response.aread())
@@ -94,7 +98,7 @@ class OpenAICompatLLM:
 
     async def stream(self, messages: Sequence[ChatMessage]) -> AsyncIterator[ChatDelta]:
         """Streams the content deltas of a chat."""
-        response = await self._open(self._body(messages, stream=True))
+        response = await self._open(self._body(_raw(messages), stream=True))
         try:
             done = False
             async for line in response.aiter_lines():
@@ -114,14 +118,14 @@ class OpenAICompatLLM:
         finally:
             await response.aclose()
 
-    def _body(self, messages: Sequence[ChatMessage], *, stream: bool) -> dict[str, Any]:
+    def _body(self, messages: Sequence[Mapping[str, Any]], *, stream: bool) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": self._cfg.model,
             "temperature": self._cfg.temperature,
             "max_tokens": self._cfg.max_tokens,
         }
         body.update({k: v for k, v in self._cfg.extra_body.items() if k not in _PROTECTED_KEYS})
-        body["messages"] = [{"role": m.role, "content": m.content} for m in messages]
+        body["messages"] = list(messages)
         if stream:
             body["stream"] = True
             body["stream_options"] = {"include_usage": True}
@@ -172,6 +176,10 @@ class OpenAICompatLLM:
         raise UpstreamError(
             f"llm request failed after {self._cfg.max_retries + 1} attempts: {last}"
         )
+
+
+def _raw(messages: Sequence[ChatMessage]) -> list[dict[str, Any]]:
+    return [{"role": m.role, "content": m.content} for m in messages]
 
 
 def _parse_sse(line: str) -> Any | None:
