@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rayld-footnote"
-version = "0.1.0"
+version = "0.1.1"
 description = "RAG engine on Postgres alone: hybrid retrieval, verifiable citations, tenant isolation, built-in evaluation."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

@@ -65,7 +65,7 @@ while the language model is any OpenAI-compatible endpoint you choose.
 ## Install
 
 ```sh
-docker pull ghcr.io/thnhdatle/footnote:v0.1.0    # server and worker, linux/amd64 and linux/arm64
+docker pull ghcr.io/thnhdatle/footnote:v0.1.1    # server and worker, linux/amd64 and linux/arm64
 ```
 
 There is no package on PyPI. The image needs PostgreSQL 15 or later with pgvector 0.8.0 or

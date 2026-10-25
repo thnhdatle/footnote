@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-25
+
+### Added
+
+- Images in PDFs are described by a vision model (`vision.*`) and stored as `image` elements
+  with their page, then searched and cited like text. Off until `vision.base_url` is set.
+- Interactive demo page in `docs/demo`.
+
+### Fixed
+
+- LLM calls are traced as `chat <model>` spans and send `traceparent`, so they join the
+  traces of an LLM gateway; each request gives one trace instead of two.
+
+### Removed
+
+- Acceptance, benchmark and mutation-testing code and their Makefile targets; benchmark
+  results stay in the README.
+
 ## [0.1.0] - 2026-10-21
 
 First public release, published as the container image `ghcr.io/thnhdatle/footnote:v0.1.0`
@@ -48,5 +66,6 @@ First public release, published as the container image `ghcr.io/thnhdatle/footno
   webhooks, models and data, evaluation, configuration, errors, operations and
   troubleshooting.
 
-[Unreleased]: https://github.com/thnhdatle/footnote/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/thnhdatle/footnote/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/thnhdatle/footnote/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/thnhdatle/footnote/releases/tag/v0.1.0
