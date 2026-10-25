@@ -18,6 +18,7 @@ def create_admin_app(deps: ApiDeps) -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        telemetry={"tracing": False},
     )
     app.state.deps = deps
     install_error_handlers(app)

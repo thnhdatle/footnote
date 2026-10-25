@@ -8,11 +8,16 @@ from typing import Any
 
 import httpx
 import pytest
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import SpanKind, StatusCode
 
 from footnote.adapters.llm import LLMConfig, OpenAICompatLLM
+from footnote.adapters.llm import client as client_module
 from footnote.domain.answer import Usage
 from footnote.domain.errors import UnavailableError, UpstreamError
 from footnote.domain.ports import ChatMessage
+from footnote.observability import setup_tracing
 
 MESSAGES = [ChatMessage("user", "hello")]
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -243,3 +248,61 @@ async def test_stream_not_configured() -> None:
     llm = OpenAICompatLLM(LLMConfig(), httpx.AsyncClient())
     with pytest.raises(UnavailableError):
         _ = [d async for d in llm.stream(MESSAGES)]
+
+
+Spans = Callable[[], tuple[ReadableSpan, ...]]
+
+
+@pytest.fixture
+def spans(monkeypatch: pytest.MonkeyPatch) -> Spans:
+    exporter = InMemorySpanExporter()
+    handle = setup_tracing(version="1", env={}, exporter=exporter, install=False)
+    monkeypatch.setattr(client_module, "tracer", handle.tracer)
+
+    def finished() -> tuple[ReadableSpan, ...]:
+        assert handle.provider is not None
+        handle.provider.force_flush()
+        return exporter.get_finished_spans()
+
+    return finished
+
+
+async def test_chat_records_client_span_and_sends_traceparent(
+    spans: Spans,
+) -> None:
+    h = Harness(lambda _r: httpx.Response(200, json=_completion("ok")))
+    await h.llm.chat(MESSAGES)
+    [span] = spans()
+    assert span.name == "chat m"
+    assert span.kind == SpanKind.CLIENT
+    attrs = span.attributes or {}
+    assert attrs["gen_ai.request.model"] == "m"
+    assert attrs["gen_ai.response.model"] == "served-model"
+    assert attrs["gen_ai.usage.input_tokens"] == 7
+    assert attrs["gen_ai.usage.output_tokens"] == 3
+    _, trace_id, span_id, _ = h.requests[0].headers["traceparent"].split("-")
+    assert trace_id == f"{span.context.trace_id:032x}"
+    assert span_id == f"{span.context.span_id:016x}"
+
+
+async def test_stream_records_usage_on_span(spans: Spans) -> None:
+    usage = {"usage": {"prompt_tokens": 4, "completion_tokens": 2}, "choices": []}
+    h = Harness(lambda _r: _sse(_chunk("Hel"), _chunk("lo"), _chunk(**usage)))
+    _ = [d async for d in h.llm.stream(MESSAGES)]
+    [span] = spans()
+    attrs = span.attributes or {}
+    assert attrs["gen_ai.usage.input_tokens"] == 4
+    assert attrs["gen_ai.usage.output_tokens"] == 2
+    assert "traceparent" in h.requests[0].headers
+
+
+async def test_failed_chat_marks_span_error(spans: Spans) -> None:
+    h = Harness(lambda _r: httpx.Response(400))
+    with pytest.raises(UpstreamError):
+        await h.llm.chat(MESSAGES)
+    with pytest.raises(UpstreamError):
+        _ = [d async for d in h.llm.stream(MESSAGES)]
+    assert [s.status.status_code for s in spans()] == [
+        StatusCode.ERROR,
+        StatusCode.ERROR,
+    ]

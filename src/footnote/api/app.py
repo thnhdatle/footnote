@@ -43,6 +43,7 @@ def build_app(deps: ApiDeps | None, *, version: str = "0.1.0") -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url="/openapi.json",
+        telemetry={"tracing": False},
     )
     app.state.deps = deps
     install_error_handlers(app)

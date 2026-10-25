@@ -67,8 +67,8 @@ def tracer() -> trace.Tracer:
     return trace.get_tracer(TRACER_NAME)
 
 
-def inject_traceparent(headers: MutableMapping[str, str]) -> None:
-    _propagator.inject(headers)
+def inject_traceparent(headers: MutableMapping[str, str], span: trace.Span | None = None) -> None:
+    _propagator.inject(headers, context=None if span is None else trace.set_span_in_context(span))
 
 
 def set_chat_attributes(  # noqa: PLR0913 - one keyword per GenAI attribute

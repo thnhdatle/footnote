@@ -154,6 +154,21 @@ rejections.
 Text routes return `409 document_not_ready` before indexing. Original routes return
 `404 original_not_retained` with `ingest.retain_originals: false`.
 
+`?format=elements` returns the elements in reading order:
+
+```json
+{"data": [
+  {"kind": "heading", "text": "Financial overview", "level": 2,
+   "heading_path": ["Annual report 2025", "Financial overview"], "page": 2, "page_to": 2, "order": 5},
+  {"kind": "image", "text": "A bar chart of revenue by quarter...", "level": null,
+   "heading_path": ["Annual report 2025", "Financial overview"], "page": 2, "page_to": 2, "order": 6}
+]}
+```
+
+`kind` is `heading`, `paragraph`, `list_item`, `table`, `code` or `image`. `level` is set on
+headings only. `heading_path` lists the enclosing headings. `page` is null for formats without
+pages.
+
 ### Chunks
 
 `GET /v1/collections/{id}/chunks/{chunk_id}` returns a chunk's full text. A chunk not in a

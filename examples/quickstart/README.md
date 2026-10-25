@@ -26,7 +26,7 @@ job <id>: done
 
 | File | Purpose |
 |---|---|
-| `config.yaml` | points `llm.base_url` at fakellm, sets the `X-Fake-Answer` header |
+| `config.yaml` | sets the `X-Fake-Answer` header for fakellm |
 | `compose.yaml` | mounts the config |
 | `make_sample_pdf.py` | regenerates `handbook.pdf` |
 | `check.sh` | offline check run by `make examples` |

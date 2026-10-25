@@ -89,7 +89,8 @@ export FOOTNOTE_LLM_MODEL=<model name your endpoint serves>
 docker compose -f deploy/docker-compose.yml -p footnote up -d footnote
 ```
 
-Any OpenAI-compatible chat endpoint works.
+Any OpenAI-compatible chat endpoint works. The compose file always sets these two variables
+(fakellm by default), so they override `llm.base_url` and `llm.model` in a mounted config file.
 
 ## 7. Run without Docker
 
